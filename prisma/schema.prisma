@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  // No url here — Prisma 7 reads the connection via prisma.config.ts for
+  // the CLI, and via the PrismaNeon adapter at runtime.
+  provider = "postgresql"
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+// id is the Clerk userId — no separate DB-generated ID needed.
+// PII (full name, email) is kept here only as a display cache; Clerk is
+// the source of truth for identity.
+model User {
+  id        String   @id       // Clerk userId
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs OptimizationRun[]
+}
+
+// ─── OptimizationRun ──────────────────────────────────────────────────────────
+// One row per optimization job. correlationId is what we expose via the API
+// and stream back in progress events — keeps internal DB ids private.
+model OptimizationRun {
+  id            String    @id @default(cuid())
+  correlationId String    @unique @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+
+  jobUrl      String
+  companyName String?
+  status      RunStatus @default(PENDING)
+  warnings    String[]  // agent warnings collected during the run
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  artifacts OptimizationArtifact[]
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+// ─── OptimizationArtifact ─────────────────────────────────────────────────────
+// Stores pointers to blob storage (Vercel Blob / S3), never the file content.
+// Full resume/cover letter text is PII and lives only in blob storage with TTL.
+model OptimizationArtifact {
+  id    String @id @default(cuid())
+  runId String
+  run   OptimizationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  type      ArtifactType
+  url       String    // blob storage URL
+  expiresAt DateTime? // TTL — null means no expiry
+
+  createdAt DateTime @default(now())
+}
+
+enum ArtifactType {
+  RESUME
+  COVER_LETTER
+  INTERVIEW_PREP
+  COMBINED_REPORT
+}

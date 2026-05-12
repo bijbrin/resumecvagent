@@ -1,4 +1,5 @@
 import { OptimizerForm } from "@/components/optimizer-form";
+import { SearchHistory } from "@/components/search-history";
 
 export default function OptimizerPage() {
   return (
@@ -10,10 +11,7 @@ export default function OptimizerPage() {
         >
           Resume Optimizer
         </h1>
-        <p
-          className="mt-2 text-sm leading-relaxed"
-          style={{ color: "var(--text-muted)" }}
-        >
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           Paste your resume and a job posting URL. Eight AI agents will run in
           parallel to analyse, strategise, and rewrite your resume — then write
           a matching cover letter.
@@ -21,6 +19,7 @@ export default function OptimizerPage() {
       </div>
 
       <OptimizerForm />
+      <SearchHistory />
     </div>
   );
 }

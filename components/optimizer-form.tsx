@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { AgentStatus, type AgentName } from "@/lib/state/resumeState";
 import { ResultsView, type ResultsData } from "@/components/results-view";
+import { saveSearch } from "@/lib/search-history";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -143,7 +144,7 @@ export function OptimizerForm() {
       const json = (await res.json()) as ApiResponse;
 
       if (json.correlationId && json.result) {
-        setResults({
+        const resultsData: ResultsData = {
           correlationId:          json.correlationId,
           optimizedResumeContent: json.result.optimizedResumeContent,
           optimizedCoverLetter:   json.result.optimizedCoverLetter,
@@ -151,7 +152,9 @@ export function OptimizerForm() {
           reportMarkdown:         json.result.reportMarkdown,
           fitScore:               json.result.fitScore,
           warnings:               json.result.warnings,
-        });
+        };
+        setResults(resultsData);
+        saveSearch(fields.jobUrl, resultsData);
       }
       setFormStatus("success");
     } catch {

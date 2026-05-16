@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -16,8 +16,17 @@ export default function ResultPage() {
   const id =
     typeof params.id === "string" ? params.id : (params.id?.[0] ?? "");
 
-  // localStorage read is synchronous — lazy initializer avoids an effect.
-  const [entry] = useState<SearchHistoryEntry | null>(() => getSearchById(id));
+  const [entry, setEntry] = useState<SearchHistoryEntry | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setEntry(getSearchById(id));
+    setLoaded(true);
+  }, [id]);
+
+  if (!loaded) {
+    return <div className="py-24" aria-hidden />;
+  }
 
   if (!entry) {
     return (
@@ -43,7 +52,7 @@ export default function ResultPage() {
 
   return (
     <div className="flex flex-col items-start py-10 px-4 max-w-5xl mx-auto gap-6">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Link href="/history">
           <Button
             variant="outline"
@@ -58,12 +67,29 @@ export default function ResultPage() {
             Back to history
           </Button>
         </Link>
-        <p
-          className="text-xs truncate"
-          style={{ color: "var(--text-faint)", maxWidth: "40ch" }}
-        >
-          {entry.jobUrl}
-        </p>
+        {entry.results.jobDetails?.title ? (
+          <div className="flex flex-col min-w-0">
+            <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+              {[entry.results.jobDetails.title, entry.results.jobDetails.company].filter(Boolean).join(" — ")}
+            </p>
+            <a
+              href={entry.jobUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs truncate hover:underline"
+              style={{ color: "var(--accent-primary)", maxWidth: "40ch" }}
+            >
+              {entry.jobUrl.replace(/^https?:\/\/(www\.)?/, "")}
+            </a>
+          </div>
+        ) : (
+          <p
+            className="text-xs truncate"
+            style={{ color: "var(--text-faint)", maxWidth: "40ch" }}
+          >
+            {entry.jobUrl}
+          </p>
+        )}
       </div>
 
       <ResultsView

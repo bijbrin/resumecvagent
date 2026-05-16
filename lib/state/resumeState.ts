@@ -45,16 +45,19 @@ export type AgentStatusMap = Record<AgentName, AgentStatusRecord>;
 // ─── Research sub-types ───────────────────────────────────────────────────────
 
 export interface JobDetails {
-  title:            string;
-  company:          string;
-  seniority:        string;       // "Junior" | "Senior" | "Staff" | "Principal" | …
-  responsibilities: string[];
-  requiredSkills:   string[];
-  preferredSkills:  string[];
-  keywords:         string[];     // ATS-critical keywords extracted from the JD
-  salary:           string | null;
-  remote:           boolean | null;
-  rawText:          string;       // full scraped JD text — passed to downstream agents
+  title:                string;
+  company:              string;
+  seniority:            string;       // "Junior" | "Senior" | "Staff" | "Principal" | …
+  responsibilities:     string[];
+  requiredSkills:       string[];
+  preferredSkills:      string[];
+  keywords:             string[];     // ATS-critical keywords extracted from the JD
+  salary:               string | null;
+  remote:               boolean | null;
+  location:             string | null; // e.g. "Sydney, NSW" or "New York, NY"
+  securityClearance:    string | null; // e.g. "NV1", "Secret", "Top Secret/SCI"
+  citizenshipRequired:  string | null; // e.g. "Australian citizen", "US citizen only"
+  rawText:              string;       // full scraped JD text — passed to downstream agents
 }
 
 export interface CompanyResearch {

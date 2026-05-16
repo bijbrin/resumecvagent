@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getResumeGraph } from "@/lib/graph/resumeBuilder";
 import { createInitialState, type ResumeJobState } from "@/lib/state/resumeState";
+import { RunStatus, Prisma } from "@/lib/generated/prisma/client";
 
 // Node.js runtime required: Prisma, LangGraph, and the LLM toolchain
 // need Node APIs that are unavailable in the Edge runtime.
@@ -65,7 +66,7 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
   // ── Upsert user row ───────────────────────────────────────────────────────
   let email = `${userId}@unknown.invalid`;
   try {
-    const clerk    = await clerkClient();
+    const clerk     = await clerkClient();
     const clerkUser = await clerk.users.getUser(userId);
     email = clerkUser.emailAddresses[0]?.emailAddress ?? email;
   } catch (err) {
@@ -94,7 +95,7 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
         userId,
         jobUrl:      data.jobUrl,
         companyName: data.companyName || null,
-        status:      "RUNNING",
+        status:      RunStatus.RUNNING,
       },
       select: { id: true, correlationId: true },
     });
@@ -106,9 +107,11 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // ── Invoke LangGraph ──────────────────────────────────────────────────────
+  const correlationId = run.correlationId;
+
+  // ── Build initial state ───────────────────────────────────────────────────
   const initialState = createInitialState({
-    correlationId:      run.correlationId,
+    correlationId,
     resumeText:         data.resumeText,
     jobUrl:             data.jobUrl,
     jobDescriptionText: data.jobDescriptionText,
@@ -117,47 +120,95 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
     companyName:        data.companyName,
   });
 
-  let finalState: ResumeJobState;
+  // ── Return immediately — the client polls for progress and results ────────
+  after(async () => {
+    await runGraphInBackground(run.id, initialState);
+  });
+
+  return NextResponse.json(
+    { correlationId, status: "RUNNING" },
+    { status: 202 },
+  );
+}
+
+// ── Background graph execution ──────────────────────────────────────────────
+// Runs inside after() so the HTTP response is already sent. All DB updates
+// are best-effort — errors are logged but cannot be returned to the client.
+
+async function runGraphInBackground(
+  runId: string,
+  initialState: ResumeJobState,
+): Promise<void> {
+  const graph = getResumeGraph();
 
   try {
-    finalState = await getResumeGraph().invoke(initialState) as ResumeJobState;
-  } catch (err) {
-    const msg = errorMessage(err);
-    console.error("[optimize] graph invocation failed:", msg);
-    try {
-      await prisma.optimizationRun.update({
-        where: { id: run.id },
-        data:  { status: "FAILED" },
-      });
-    } catch { /* best-effort */ }
-    return NextResponse.json({ error: "Optimization failed", detail: msg }, { status: 500 });
-  }
+    let finalState: ResumeJobState | undefined;
 
-  // ── Persist run status ────────────────────────────────────────────────────
-  try {
-    await prisma.optimizationRun.update({
-      where: { id: run.id },
-      data: {
-        status:      "DONE",
-        completedAt: new Date(),
-        warnings:    finalState.warnings,
-      },
-    });
-  } catch (err) {
-    // Non-fatal — the graph succeeded; just log and continue.
-    console.warn("[optimize] DB run update failed (non-fatal):", errorMessage(err));
-  }
+    // Stream the graph step-by-step so we can sync agentStatus to the DB
+    // after every node completion. This lets the status endpoint show live
+    // progress without SSE.
+    const stream = await graph.stream(initialState, { streamMode: "values" });
 
-  // ── Return results ────────────────────────────────────────────────────────
-  return NextResponse.json({
-    correlationId: run.correlationId,
-    result: {
+    for await (const chunk of stream) {
+      const state = chunk as ResumeJobState;
+      finalState = state;
+
+      // Best-effort sync of live progress to the DB
+      try {
+        await prisma.optimizationRun.update({
+          where: { id: runId },
+          data: {
+            agentStatusJson: state.agentStatus as unknown as Prisma.InputJsonValue,
+            warnings:        state.warnings,
+          },
+        });
+      } catch (dbErr) {
+        console.warn("[optimize] agentStatus sync failed (non-fatal):", errorMessage(dbErr));
+      }
+    }
+
+    if (!finalState) {
+      throw new Error("Graph stream produced no final state");
+    }
+
+    // Persist the completed run
+    const result = {
       optimizedResumeContent: finalState.optimizedResumeContent ?? null,
       optimizedCoverLetter:   finalState.optimizedCoverLetter   ?? null,
       interviewCheatsheet:    finalState.interviewCheatsheet    ?? null,
       reportMarkdown:         finalState.reportMarkdown         ?? null,
       fitScore:               finalState.tailoringStrategy?.fitScore ?? null,
       warnings:               finalState.warnings,
-    },
-  });
+      companyResearch:        finalState.companyResearch        ?? null,
+      jobDetails:             finalState.jobDetails             ?? null,
+    };
+
+    await prisma.optimizationRun.update({
+      where: { id: runId },
+      data: {
+        status:      RunStatus.DONE,
+        completedAt: new Date(),
+        resultJson:  result as unknown as Prisma.InputJsonValue,
+        warnings:    finalState.warnings,
+      },
+    });
+
+    console.log("[optimize] run completed:", runId);
+  } catch (err) {
+    const msg = errorMessage(err);
+    console.error("[optimize] graph invocation failed:", msg);
+
+    // Mark the run as failed so the client stops polling
+    try {
+      await prisma.optimizationRun.update({
+        where: { id: runId },
+        data: {
+          status:   RunStatus.FAILED,
+          warnings: { push: `[background] Optimization failed: ${msg}` },
+        },
+      });
+    } catch (dbErr) {
+      console.error("[optimize] DB run update to FAILED failed:", errorMessage(dbErr));
+    }
+  }
 }

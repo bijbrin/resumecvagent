@@ -13,15 +13,18 @@ import { scrapeJobUrl } from "../scraper/jobScraper";
 // .catch() on every field so a malformed LLM response never crashes the graph.
 
 const JobExtractSchema = z.object({
-  title:            z.string().catch(""),
-  company:          z.string().catch(""),
-  seniority:        z.string().catch(""),
-  responsibilities: z.array(z.string()).catch([]),
-  requiredSkills:   z.array(z.string()).catch([]),
-  preferredSkills:  z.array(z.string()).catch([]),
-  keywords:         z.array(z.string()).catch([]),
-  salary:           z.string().nullable().catch(null),
-  remote:           z.boolean().nullable().catch(null),
+  title:               z.string().catch(""),
+  company:             z.string().catch(""),
+  seniority:           z.string().catch(""),
+  responsibilities:    z.array(z.string()).catch([]),
+  requiredSkills:      z.array(z.string()).catch([]),
+  preferredSkills:     z.array(z.string()).catch([]),
+  keywords:            z.array(z.string()).catch([]),
+  salary:              z.string().nullable().catch(null),
+  remote:              z.boolean().nullable().catch(null),
+  location:            z.string().nullable().catch(null),
+  securityClearance:   z.string().nullable().catch(null),
+  citizenshipRequired: z.string().nullable().catch(null),
 });
 
 const SYSTEM_PROMPT = `You are an expert at parsing job descriptions.
@@ -45,7 +48,10 @@ Return a JSON object with exactly these fields:
 - preferredSkills (string[]): nice-to-have or preferred skills
 - keywords (string[]): ATS-critical keywords a recruiter would search for — include technologies, methodologies, certifications
 - salary (string | null): salary range if mentioned, otherwise null
-- remote (boolean | null): true if fully remote, false if on-site required, null if hybrid or unclear`;
+- remote (boolean | null): true if fully remote, false if on-site required, null if hybrid or unclear
+- location (string | null): city and state/country e.g. "Sydney, NSW" or "Austin, TX", null if not stated
+- securityClearance (string | null): required clearance level e.g. "NV1", "Secret", "Top Secret/SCI", null if none required
+- citizenshipRequired (string | null): citizenship or residency requirement e.g. "Australian citizen", "US citizen only", null if not required`;
 }
 
 // ─── Agent node ───────────────────────────────────────────────────────────────

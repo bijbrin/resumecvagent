@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AgentStatus, type AgentName } from "@/lib/state/resumeState";
+import { AgentStatus, type AgentName, type AgentStatusMap, type CompanyResearch, type JobDetails } from "@/lib/state/resumeState";
 import { ResultsView, type ResultsData } from "@/components/results-view";
 import { saveSearch } from "@/lib/search-history";
 
@@ -24,10 +24,24 @@ interface FormFields {
   jobDescriptionText: string;
 }
 
-type FormStatus = "idle" | "loading" | "success" | "error";
-
 interface ApiResponse {
   correlationId?: string;
+  status?: string;
+  error?: string;
+}
+
+interface StatusResponse {
+  correlationId: string;
+  status: string;
+  agentStatus: AgentStatusMap | null;
+  warnings: string[];
+  createdAt: string;
+  completedAt: string | null;
+}
+
+interface ResultResponse {
+  correlationId: string;
+  status: "DONE" | "RUNNING" | "FAILED";
   result?: {
     optimizedResumeContent: string | null;
     optimizedCoverLetter:   string | null;
@@ -35,6 +49,8 @@ interface ApiResponse {
     reportMarkdown:         string | null;
     fitScore:               number | null;
     warnings:               string[];
+    companyResearch:        CompanyResearch | null;
+    jobDetails:             JobDetails | null;
   };
   error?: string;
 }
@@ -50,6 +66,8 @@ const AGENT_SEQUENCE: Array<{ name: AgentName; label: string }> = [
   { name: "coverLetterWriter", label: "Write cover letter" },
   { name: "finalCompiler",     label: "Compile report"     },
 ];
+
+const POLL_INTERVAL_MS = 2000;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -72,7 +90,7 @@ function AgentStatusBadge({ status }: { status: AgentStatus }) {
   );
 }
 
-function LoadingPanel() {
+function LoadingPanel({ agentStatus }: { agentStatus: AgentStatusMap | null }) {
   return (
     <Card style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
       <CardHeader className="pb-3">
@@ -85,20 +103,154 @@ function LoadingPanel() {
       </CardHeader>
       <CardContent>
         <ol className="flex flex-col gap-2">
-          {AGENT_SEQUENCE.map(({ name, label }) => (
-            <li key={name} className="flex items-center justify-between gap-4">
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                {label}
-              </span>
-              {/* Skeleton stubs running synchronously — statuses will be
-                  live via SSE once streaming is wired in a later step. */}
-              <AgentStatusBadge status={AgentStatus.Pending} />
-            </li>
-          ))}
+          {AGENT_SEQUENCE.map(({ name, label }) => {
+            const status = agentStatus?.[name]?.status ?? AgentStatus.Pending;
+            return (
+              <li key={name} className="flex items-center justify-between gap-4">
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  {label}
+                </span>
+                <AgentStatusBadge status={status} />
+              </li>
+            );
+          })}
         </ol>
       </CardContent>
     </Card>
   );
+}
+
+// ── Hook: poll optimization status ────────────────────────────────────────────
+
+type PollPhase = "idle" | "submitting" | "polling" | "done" | "error";
+
+function useOptimizationPoll() {
+  const [phase, setPhase] = useState<PollPhase>("idle");
+  const [correlationId, setCorrelationId] = useState<string | null>(null);
+  const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [results, setResults] = useState<ResultsData | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const reset = useCallback(() => {
+    stopPolling();
+    setPhase("idle");
+    setCorrelationId(null);
+    setStatus(null);
+    setResults(null);
+    setErrorMessage(null);
+  }, [stopPolling]);
+
+  const start = useCallback(async (fields: FormFields) => {
+    stopPolling();
+    setPhase("submitting");
+    setCorrelationId(null);
+    setStatus(null);
+    setResults(null);
+    setErrorMessage(null);
+
+    try {
+      // 1. Submit the optimization request
+      const res = await fetch("/api/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+
+      if (!res.ok) {
+        let detail = `Server error ${res.status}`;
+        try {
+          const errJson = (await res.json()) as ApiResponse;
+          detail = errJson.error ?? detail;
+        } catch { /* response wasn't JSON */ }
+        setErrorMessage(detail);
+        setPhase("error");
+        return;
+      }
+
+      const json = (await res.json()) as ApiResponse;
+      if (!json.correlationId) {
+        setErrorMessage("Missing correlation ID from server");
+        setPhase("error");
+        return;
+      }
+
+      const cid = json.correlationId;
+      setCorrelationId(cid);
+      setPhase("polling");
+
+      // 2. Start polling status
+      pollRef.current = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/api/optimize/status/${cid}`);
+          if (!statusRes.ok) {
+            if (statusRes.status === 404) {
+              setErrorMessage("Optimization run not found");
+              stopPolling();
+              setPhase("error");
+            }
+            return;
+          }
+
+          const statusJson = (await statusRes.json()) as StatusResponse;
+          setStatus(statusJson);
+
+          if (statusJson.status === "DONE") {
+            stopPolling();
+            // 3. Fetch results
+            const resultRes = await fetch(`/api/optimize/result/${cid}`);
+            if (!resultRes.ok) {
+              setErrorMessage("Failed to fetch results");
+              setPhase("error");
+              return;
+            }
+            const resultJson = (await resultRes.json()) as ResultResponse;
+            if (resultJson.status === "DONE" && resultJson.result) {
+              const resultsData: ResultsData = {
+                correlationId:          cid,
+                optimizedResumeContent: resultJson.result.optimizedResumeContent,
+                optimizedCoverLetter:   resultJson.result.optimizedCoverLetter,
+                interviewCheatsheet:    resultJson.result.interviewCheatsheet,
+                reportMarkdown:         resultJson.result.reportMarkdown,
+                fitScore:               resultJson.result.fitScore,
+                warnings:               resultJson.result.warnings,
+                companyResearch:        resultJson.result.companyResearch ?? null,
+                jobDetails:             resultJson.result.jobDetails ?? null,
+              };
+              setResults(resultsData);
+              setPhase("done");
+              saveSearch(fields.jobUrl, resultsData);
+            }
+          } else if (statusJson.status === "FAILED") {
+            stopPolling();
+            const lastWarning = statusJson.warnings[statusJson.warnings.length - 1] ?? "Optimization failed";
+            setErrorMessage(lastWarning);
+            setPhase("error");
+          }
+        } catch {
+          // Polling error — keep trying
+        }
+      }, POLL_INTERVAL_MS);
+    } catch {
+      setErrorMessage("Network error — please check your connection and try again.");
+      setPhase("error");
+    }
+  }, [stopPolling]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
+  const isLoading = phase === "submitting" || phase === "polling";
+
+  return { phase, isLoading, correlationId, status, results, errorMessage, start, reset };
 }
 
 // ── Main form ─────────────────────────────────────────────────────────────────
@@ -109,67 +261,23 @@ export function OptimizerForm() {
     jobUrl: "",
     jobDescriptionText: "",
   });
-  const [formStatus, setFormStatus] = useState<FormStatus>("idle");
-  const [results, setResults] = useState<ResultsData | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const poll = useOptimizationPoll();
 
   function setField(key: keyof FormFields, value: string) {
     setFields((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setFormStatus("loading");
-    setErrorMessage(null);
-
-    try {
-      const res = await fetch("/api/optimize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fields),
-      });
-
-      if (!res.ok) {
-        // Attempt to parse a JSON error body; fall back to status text.
-        let detail = `Server error ${res.status}`;
-        try {
-          const errJson = (await res.json()) as ApiResponse;
-          detail = errJson.error ?? detail;
-        } catch { /* response wasn't JSON */ }
-        setErrorMessage(detail);
-        setFormStatus("error");
-        return;
-      }
-
-      const json = (await res.json()) as ApiResponse;
-
-      if (json.correlationId && json.result) {
-        const resultsData: ResultsData = {
-          correlationId:          json.correlationId,
-          optimizedResumeContent: json.result.optimizedResumeContent,
-          optimizedCoverLetter:   json.result.optimizedCoverLetter,
-          interviewCheatsheet:    json.result.interviewCheatsheet,
-          reportMarkdown:         json.result.reportMarkdown,
-          fitScore:               json.result.fitScore,
-          warnings:               json.result.warnings,
-        };
-        setResults(resultsData);
-        saveSearch(fields.jobUrl, resultsData);
-      }
-      setFormStatus("success");
-    } catch {
-      setErrorMessage("Network error — please check your connection and try again.");
-      setFormStatus("error");
-    }
+    await poll.start(fields);
   }
 
-  if (formStatus === "success" && results) {
+  if (poll.phase === "done" && poll.results) {
     return (
       <ResultsView
-        data={results}
+        data={poll.results}
         onReset={() => {
-          setFormStatus("idle");
-          setResults(null);
+          poll.reset();
         }}
       />
     );
@@ -246,10 +354,12 @@ export function OptimizerForm() {
       </Card>
 
       {/* Loading panel — visible while the graph runs */}
-      {formStatus === "loading" && <LoadingPanel />}
+      {poll.isLoading && (
+        <LoadingPanel agentStatus={poll.status?.agentStatus ?? null} />
+      )}
 
       {/* Error message */}
-      {formStatus === "error" && errorMessage && (
+      {poll.phase === "error" && poll.errorMessage && (
         <div
           className="rounded-lg border px-4 py-3 text-sm"
           style={{
@@ -258,17 +368,17 @@ export function OptimizerForm() {
             color: "var(--state-error)",
           }}
         >
-          {errorMessage}
+          {poll.errorMessage}
         </div>
       )}
 
       <div className="flex justify-end">
         <Button
           type="submit"
-          disabled={formStatus === "loading"}
+          disabled={poll.isLoading}
           style={{ background: "var(--accent-primary)", color: "#fff" }}
         >
-          {formStatus === "loading" ? "Optimizing…" : "Optimize Resume"}
+          {poll.isLoading ? "Optimizing…" : "Optimize Resume"}
         </Button>
       </div>
     </form>

@@ -158,6 +158,42 @@ async function fetchDirect(url: string): Promise<{ text: string; html: string } 
   }
 }
 
+// ─── LinkedIn guest API ───────────────────────────────────────────────────────
+// LinkedIn's /jobs/view/ URLs are bot-protected (HTTP 999). The guest API
+// endpoint returns the full job HTML fragment without auth — use it instead.
+
+function extractLinkedInJobId(url: string): string | null {
+  const match = /\/jobs\/view\/(\d+)/.exec(url);
+  return match?.[1] ?? null;
+}
+
+async function fetchLinkedInGuestApi(url: string): Promise<{ text: string; html: string } | null> {
+  const jobId = extractLinkedInJobId(url);
+  if (!jobId) return null;
+
+  const guestUrl = `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${jobId}`;
+  try {
+    const res = await fetch(guestUrl, {
+      headers: {
+        ...FETCH_HEADERS,
+        Referer: "https://www.linkedin.com/jobs/search/",
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      console.warn(`[jobScraper] LinkedIn guest API HTTP ${res.status} for job ${jobId}`);
+      return null;
+    }
+    const html = await res.text();
+    const text = extractCleanText(html);
+    console.log(`[jobScraper] LinkedIn guest API: ${text.length} chars for job ${jobId}`);
+    return { text, html };
+  } catch (err) {
+    console.warn(`[jobScraper] LinkedIn guest API failed for job ${jobId}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 // ─── Minimum content threshold ────────────────────────────────────────────────
 // If we get less than this after all post-processing, treat it as a login wall.
 
@@ -167,24 +203,35 @@ const MIN_CONTENT_CHARS = 200;
 //
 // Scrape strategy (in priority order):
 //   1. Firecrawl — renders JS, handles anti-bot (requires FIRECRAWL_API_KEY)
-//   2. Direct HTTP fetch — sufficient for LinkedIn (job content is server-rendered)
+//   2. LinkedIn guest API — for LinkedIn URLs, bypasses bot detection (HTTP 999)
+//   3. Direct HTTP fetch — fallback for Lever, Greenhouse, and other ATS pages
 //
 // LinkedIn post-processing (in priority order):
 //   A. CSS-selector extraction — targets div.show-more-less-html__markup + <title>
 //      Works on server-rendered HTML from both Firecrawl and direct fetch.
-//   B. Heuristic text parser — fallback for Firecrawl markdown or minimal HTML.
+//   B. Heuristic text parser — fallback for Firecrawl markdown or bot walls.
 
 export async function scrapeJobUrl(url: string): Promise<ScrapedJob | null> {
   const siteType = identifySite(url);
 
   // ── 1. Try Firecrawl ───────────────────────────────────────────────────────
   let page = await scrapeWithFirecrawl(url);
-  const usedFirecrawl = page !== null;
+  let source: "firecrawl" | "linkedin-guest" | "direct" | null = page ? "firecrawl" : null;
 
   if (!page) {
-    // ── 2. Direct fetch fallback ─────────────────────────────────────────────
-    // LinkedIn job content is server-rendered — direct fetch works.
-    // Glassdoor still typically returns a login wall without Firecrawl.
+    // ── 2. LinkedIn guest API ────────────────────────────────────────────────
+    // The regular /jobs/view/ URL is bot-protected. The guest API returns
+    // the full job HTML fragment without auth.
+    if (siteType === "linkedin") {
+      page = await fetchLinkedInGuestApi(url);
+      if (page) source = "linkedin-guest";
+    }
+  }
+
+  if (!page) {
+    // ── 3. Direct fetch fallback ─────────────────────────────────────────────
+    // Works for Lever, Greenhouse, and some other ATS-hosted pages.
+    // Glassdoor typically returns a login wall without Firecrawl.
     if (siteType === "glassdoor") {
       console.warn(
         "[jobScraper] Glassdoor without Firecrawl will likely return a login wall. " +
@@ -192,6 +239,7 @@ export async function scrapeJobUrl(url: string): Promise<ScrapedJob | null> {
       );
     }
     page = await fetchDirect(url);
+    if (page) source = "direct";
   }
 
   if (!page) return null;
@@ -207,12 +255,10 @@ export async function scrapeJobUrl(url: string): Promise<ScrapedJob | null> {
     let parsed = extractLinkedInFromHtml(html, url);
 
     if (parsed) {
-      console.log("[jobScraper] LinkedIn: CSS-selector extraction succeeded.");
+      console.log(`[jobScraper] LinkedIn: CSS-selector extraction succeeded (source: ${source}).`);
     } else {
-      // Heuristic fallback — works on Firecrawl markdown or minimal HTML.
       console.warn(
-        "[jobScraper] LinkedIn: CSS selectors found no description — falling back to text heuristics. " +
-        (usedFirecrawl ? "Source: Firecrawl." : "Source: direct fetch.")
+        `[jobScraper] LinkedIn: CSS selectors found no description — falling back to text heuristics. Source: ${source}.`
       );
       parsed = parseLinkedInText(rawText, html, url);
     }
@@ -228,11 +274,14 @@ export async function scrapeJobUrl(url: string): Promise<ScrapedJob | null> {
   }
 
   if (rawText.length < MIN_CONTENT_CHARS) {
-    console.warn(
-      `[jobScraper] Too little content (${rawText.length} chars) from ${siteType} at ${url}. ` +
-      (usedFirecrawl
+    const sourceHint =
+      source === "firecrawl"
         ? "Firecrawl returned minimal content — site may require a logged-in session."
-        : "Direct fetch returned minimal content — site may require JS rendering.")
+        : source === "linkedin-guest"
+          ? "LinkedIn guest API returned minimal content — job may be removed or URL malformed."
+          : "Direct fetch returned minimal content — site may require JS rendering.";
+    console.warn(
+      `[jobScraper] Too little content (${rawText.length} chars) from ${siteType} at ${url}. ${sourceHint}`
     );
     return null;
   }

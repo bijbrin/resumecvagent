@@ -4,20 +4,23 @@ import type { ChatMessage, LLMOptions } from "./anthropic";
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 //
 // Moonshot publishes TWO API gateways:
-//   1. api.moonshot.cn/v1   — China-region endpoint (keys from platform.moonshot.cn)
-//   2. api.moonshot.ai/v1   — International endpoint (same key format, better latency
-//                              outside China; use KIMI_BASE_URL to point here)
+//   1. api.moonshot.ai/v1   — International endpoint (default; platform.kimi.ai keys)
+//   2. api.moonshot.cn/v1   — China-region endpoint; set KIMI_BASE_URL to use this
 //
-// Kimi Code (kimi.com/code) may use a different model name such as "kimi-k2-0711-preview".
-// Set KIMI_MODEL_OVERRIDE in .env.local if your key is provisioned for a non-standard model.
+// Default model is "kimi-k2.6" (current flagship, 256K context). The older
+// "kimi-k2*" preview series is officially discontinued 2026-05-25. Set
+// KIMI_MODEL_OVERRIDE in .env.local for legacy moonshot-v1-* models.
 
-const DEFAULT_BASE_URL = "https://api.moonshot.cn/v1";
+const DEFAULT_BASE_URL = "https://api.moonshot.ai/v1";
 
 // Read at call time (not module load) so hot-reload picks up .env.local changes.
 function kimiBaseUrl(): string {
   return (process.env.KIMI_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 }
 
+// kimi-k2.6 is a reasoning model — it puts chain-of-thought in reasoning_content
+// and often returns null content, breaking JSON extraction. Use the standard
+// moonshot-v1-32k for reliable structured output.
 const DEFAULT_MODEL = "moonshot-v1-32k";
 export const KIMI_MODEL = DEFAULT_MODEL;
 
@@ -26,7 +29,7 @@ function kimiModel(optionsModel?: string): string {
 }
 
 interface MoonshotChoice {
-  message: { content: string | null };
+  message: { content: string | null; reasoning_content?: string | null };
 }
 
 interface MoonshotResponse {
@@ -43,7 +46,8 @@ export async function kimiGenerateText(
 
   const baseUrl = kimiBaseUrl();
   const model   = kimiModel(options.model);
-  const { temperature = 0.3, maxTokens = 2048, systemPrompt } = options;
+  const { maxTokens = 2048, systemPrompt } = options;
+  const temperature = 1; // all Moonshot models require temperature=1
 
   const url = `${baseUrl}/chat/completions`;
   console.log(`[kimi] POST ${url} model=${model} key=...${apiKey.slice(-6)}`);
@@ -65,15 +69,14 @@ export async function kimiGenerateText(
           ...messages,
         ],
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(120_000),
     });
   } catch (err) {
     // "fetch failed" = TCP-level failure (DNS, geo-block, timeout).
-    // Likely api.moonshot.cn is unreachable — try setting KIMI_BASE_URL=https://api.moonshot.ai/v1
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(
       `Kimi connection failed to ${url}: ${msg}. ` +
-      "If you are outside China, set KIMI_BASE_URL=https://api.moonshot.ai/v1 in .env.local.",
+      "If your key is provisioned on the China platform, set KIMI_BASE_URL=https://api.moonshot.cn/v1 in .env.local.",
     );
   }
 

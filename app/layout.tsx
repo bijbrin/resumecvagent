@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Providers } from "./providers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,21 +19,20 @@ export const metadata: Metadata = {
   description: "AI-powered resume & cover letter optimization agent",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const isDark = (await cookies()).get("theme")?.value === "dark";
+
   return (
     <html
       lang="en"
-      suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased${isDark ? " dark" : ""}`}
     >
       <body className="min-h-full flex flex-col">
-        <ClerkProvider afterSignOutUrl="/">
-          <Providers>{children}</Providers>
-        </ClerkProvider>
+        <ClerkProvider afterSignOutUrl="/">{children}</ClerkProvider>
       </body>
     </html>
   );

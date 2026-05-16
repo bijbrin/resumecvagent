@@ -90,22 +90,21 @@ export function extractLinkedInFromHtml(html: string, url: string): ParsedLinked
 
   if (!description || description.length < 100) return null;
 
-  // ── Title + Company from <title> ─────────────────────────────────────────────
-  // Format: "{Company} hiring {Role} | {Location} | LinkedIn"
+  // ── Title + Company ──────────────────────────────────────────────────────────
   let title   = "";
   let company = "";
   let location = "";
 
+  // Strategy A: <title> tag (regular /jobs/view/ page)
+  // Format: "{Company} hiring {Role} | {Location} | LinkedIn"
   const pageTitle = $("title").first().text().trim();
   if (pageTitle) {
-    // "{Company} hiring {Role} | {Location} | LinkedIn"
     const hiringMatch = /^(.+?)\s+hiring\s+(.+?)\s*\|\s*(.+?)\s*\|\s*LinkedIn/i.exec(pageTitle);
     if (hiringMatch) {
       company  = hiringMatch[1].trim();
       title    = hiringMatch[2].trim();
       location = hiringMatch[3].trim();
     } else {
-      // Fallback: "{Role} | {Company} | LinkedIn"
       const pipeMatch = /^(.+?)\s*\|\s*(.+?)\s*\|\s*LinkedIn/i.exec(pageTitle);
       if (pipeMatch) {
         title   = pipeMatch[1].trim();
@@ -114,7 +113,25 @@ export function extractLinkedInFromHtml(html: string, url: string): ParsedLinked
     }
   }
 
-  // ── Title from canonical URL slug if still missing ───────────────────────────
+  // Strategy B: guest API HTML (jobs-guest/jobs/api/jobPosting/{id})
+  // These selectors target the HTML fragment returned by LinkedIn's guest API.
+  if (!title) {
+    title = $(".top-card-layout__title, .topcard__title").first().text().trim();
+  }
+  if (!company) {
+    company = $(".topcard__org-name-link, .top-card-layout__second-subline a, .topcard__flavor--black-link").first().text().trim();
+    if (!company) {
+      company = $(".topcard__flavor").first().text().trim();
+    }
+  }
+  if (!location) {
+    $(".topcard__flavor--bullet").each((_, el) => {
+      const t = $(el).text().trim();
+      if (t && t.length < 80) { location = t; return false; }
+    });
+  }
+
+  // Strategy C: title from canonical URL slug
   // e.g. /jobs/view/software-engineer-frontend-remote-at-crossing-hurdles-4377667990
   if (!title) {
     const slugMatch = /\/jobs\/view\/([^/?#]+)/i.exec(url);
@@ -128,7 +145,7 @@ export function extractLinkedInFromHtml(html: string, url: string): ParsedLinked
     }
   }
 
-  // ── Location from top-card bullets ──────────────────────────────────────────
+  // ── Location from top-card bullets (regular page fallback) ──────────────────
   if (!location) {
     $(".job-details-jobs-unified-top-card__bullet, .topcard__flavor--bullet").each((_, el) => {
       const t = $(el).text().trim();

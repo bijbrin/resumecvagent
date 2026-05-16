@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Trash2, ExternalLink, MapPin, Shield, Link2 } from "lucide-react";
 import {
@@ -168,17 +168,14 @@ function HistoryCard({ entry, onDelete }: { entry: SearchHistoryEntry; onDelete:
 }
 
 export default function HistoryPage() {
-  const [entries, setEntries] = useState<SearchHistoryEntry[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    setEntries(getHistory());
-    setLoaded(true);
-  }, []);
+  const [{ entries, loaded }, setPage] = useState<{
+    entries: SearchHistoryEntry[];
+    loaded: boolean;
+  }>(() => ({ entries: getHistory(), loaded: true }));
 
   function handleDelete(id: string) {
     deleteSearch(id);
-    setEntries(getHistory());
+    setPage({ entries: getHistory(), loaded: true });
   }
 
   if (!loaded) {

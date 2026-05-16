@@ -10,11 +10,16 @@
  *   START
  *     │
  *   inputParser
- *     ├──────────────────────────┐────────────────────────┐
- *   jobAgent              companyAgent             resumeAnalyzer
- *     └──────────────────────────┴────────────────────────┘
- *                                │  (fan-in: all three must complete)
- *                          strategyAgent
+ *     ├─────────────────────────────────────────┐
+ *   jobAgent                              resumeAnalyzer
+ *     ├──────────────────────┐                  │
+ *   companyAgent             │                  │
+ *     └──────────────────────┴──────────────────┘
+ *                            │  (fan-in: all three must complete)
+ *                      strategyAgent
+ *
+ * companyAgent runs after jobAgent so it can use the companyName
+ * that jobAgent extracts from the job posting.
  *                     ┌─────────┴──────────┐
  *               resumeWriter       coverLetterWriter
  *                     └─────────┬──────────┘
@@ -134,10 +139,12 @@ export function buildResumeGraph() {
     // ── Edges — explicit topology, no implicit wiring ─────────────────────
     .addEdge(START, "inputParser")
 
-    // Fan-out: three research agents run in parallel
+    // Fan-out: jobAgent and resumeAnalyzer run in parallel from inputParser.
+    // companyAgent starts after jobAgent so it can use the companyName that
+    // jobAgent extracts from the job posting.
     .addEdge("inputParser", "jobAgent")
-    .addEdge("inputParser", "companyAgent")
     .addEdge("inputParser", "resumeAnalyzer")
+    .addEdge("jobAgent",    "companyAgent")
 
     // Fan-in: strategyAgent waits for all three to complete
     .addEdge("jobAgent",       "strategyAgent")

@@ -38,11 +38,11 @@ const serverSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
   OPENAI_API_KEY: z.string().min(1).optional(),
   KIMI_API_KEY:   z.string().min(1).optional(),
-  // Override the Kimi base URL when your key is for a non-CN endpoint
-  // (e.g. international Kimi Code endpoint). Defaults to api.moonshot.cn/v1.
+  // Override the Kimi base URL. Defaults to api.moonshot.ai/v1 (international);
+  // set to api.moonshot.cn/v1 for China-region keys.
   KIMI_BASE_URL:  z.string().url().optional(),
-  // Override the default model (moonshot-v1-32k) — useful for Kimi Code models
-  // that use a different name (e.g. kimi-k2-0711-preview).
+  // Override the default model (kimi-k2.6) — set when your key is provisioned
+  // for a legacy model (e.g. moonshot-v1-128k).
   KIMI_MODEL_OVERRIDE: z.string().min(1).optional(),
 
   // ── Kimi feature flags (gate the parallel Kimi agent variants) ─────────

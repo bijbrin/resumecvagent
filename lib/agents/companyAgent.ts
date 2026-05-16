@@ -8,6 +8,7 @@ import {
 } from "../state/resumeState";
 import { structuredOutput, EXTRACTION_MODEL } from "../llm/anthropic";
 import { scrapeUrlRaw, findAboutPageUrl } from "../scraper/jobScraper";
+import { serperCompanySearch } from "../scraper/serperSearch";
 
 // ─── LLM extraction schema ────────────────────────────────────────────────────
 
@@ -58,10 +59,12 @@ function buildResearchText(
   companyName: string,
   homepageText: string,
   aboutPageText: string,
+  serperText: string,
 ): string {
   const parts: string[] = [`Company: ${companyName}`];
-  if (homepageText) parts.push(`Homepage:\n${homepageText.slice(0, 3_000)}`);
-  if (aboutPageText) parts.push(`About page:\n${aboutPageText.slice(0, 3_000)}`);
+  if (serperText)    parts.push(`Web search results:\n${serperText.slice(0, 3_000)}`);
+  if (homepageText)  parts.push(`Homepage:\n${homepageText.slice(0, 2_500)}`);
+  if (aboutPageText) parts.push(`About page:\n${aboutPageText.slice(0, 2_500)}`);
   return parts.join("\n\n---\n\n");
 }
 
@@ -93,6 +96,13 @@ export async function companyAgentNode(
     };
   }
 
+  // ── Serper web search (runs even without a URL) ────────────────────────────
+  let serperText = "";
+  if (companyName) {
+    const snippets = await serperCompanySearch(companyName);
+    if (snippets) serperText = snippets;
+  }
+
   // ── Scrape homepage ────────────────────────────────────────────────────────
   let homepageText = "";
   let aboutPageText = "";
@@ -120,7 +130,7 @@ export async function companyAgentNode(
   }
 
   // ── LLM synthesis ─────────────────────────────────────────────────────────
-  const researchText = buildResearchText(companyName, homepageText, aboutPageText);
+  const researchText = buildResearchText(companyName, homepageText, aboutPageText, serperText);
 
   let extracted: z.infer<typeof CompanyExtractSchema>;
   try {

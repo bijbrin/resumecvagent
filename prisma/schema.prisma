@@ -37,6 +37,14 @@ model OptimizationRun {
   status      RunStatus @default(PENDING)
   warnings    String[]  // agent warnings collected during the run
 
+  // Live progress map updated during graph execution.
+  // Agents update this as they complete so the status endpoint can stream progress.
+  agentStatusJson Json?
+
+  // Full result object stored when the run completes.
+  // Interim measure — architecture targets blob storage for artifacts.
+  resultJson      Json?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   completedAt DateTime?

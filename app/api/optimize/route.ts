@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getResumeGraph } from "@/lib/graph/resumeBuilder";
 import { createInitialState, type ResumeJobState } from "@/lib/state/resumeState";
-import { RunStatus, Prisma } from "@/lib/generated/prisma/client";
+import { RunStatus, ResumeSource, Prisma } from "@/lib/generated/prisma/client";
 
 // Node.js runtime required: Prisma, LangGraph, and the LLM toolchain
 // need Node APIs that are unavailable in the Edge runtime.
@@ -17,6 +17,9 @@ const BodySchema = z.object({
   coverLetterText:    z.string().optional().default(""),
   companyUrl:         z.string().optional().default(""),
   companyName:        z.string().optional().default(""),
+  // When the client sends a resumeId, the resumeText came from an already-saved
+  // resume — skip auto-save to avoid duplicating history rows.
+  resumeId:           z.string().optional(),
 });
 
 // Serialise any thrown value to a readable string for logging.
@@ -85,6 +88,24 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
       { error: "Database error — check DATABASE_URL and run prisma db push.", detail: errorMessage(err) },
       { status: 503 },
     );
+  }
+
+  // ── Auto-save pasted resume to history ────────────────────────────────────
+  // Only when the client did not pass an existing resumeId. Best-effort —
+  // history is a nice-to-have, must not block the run.
+  if (!data.resumeId) {
+    try {
+      await prisma.resume.create({
+        data: {
+          userId,
+          name:    `Pasted ${new Date().toISOString().slice(0, 10)}`,
+          source:  ResumeSource.TEXT,
+          content: data.resumeText,
+        },
+      });
+    } catch (err) {
+      console.warn("[optimize] auto-save resume failed (non-fatal):", errorMessage(err));
+    }
   }
 
   // ── Create OptimizationRun ────────────────────────────────────────────────

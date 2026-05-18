@@ -32,3 +32,9 @@ Reference: the Python implementation that this Next.js
 build replicates lives at `../ResumeCVAgentt/`. Use it
 as a behavioral reference for agent prompts, scraping
 heuristics, and output shapes — not as a code template.
+
+## Commit conventions
+
+Do NOT add `Co-Authored-By: Claude …` trailers (or any
+Claude/Anthropic attribution) to commit messages or PR
+descriptions in this repo. Plain commit messages only.

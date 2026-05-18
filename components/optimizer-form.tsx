@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, type FormEvent } from "react";
+import { useState, useEffect, useRef, useCallback, type FormEvent, type ChangeEvent } from "react";
+import { Upload, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,12 +17,28 @@ import { AgentStatus, type AgentName, type AgentStatusMap, type CompanyResearch,
 import { ResultsView, type ResultsData } from "@/components/results-view";
 import { saveSearch } from "@/lib/search-history";
 
+// ── Saved-resume types ────────────────────────────────────────────────────────
+
+type ResumeSourceLabel = "TEXT" | "PDF" | "DOCX";
+
+interface ResumeMeta {
+  id:        string;
+  name:      string;
+  source:    ResumeSourceLabel;
+  createdAt: string;
+}
+
+interface ResumeRecord extends ResumeMeta {
+  content: string;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface FormFields {
   resumeText: string;
   jobUrl: string;
   jobDescriptionText: string;
+  resumeId?: string;
 }
 
 interface ApiResponse {
@@ -261,10 +278,90 @@ export function OptimizerForm() {
     jobUrl: "",
     jobDescriptionText: "",
   });
+  const [resumes, setResumes] = useState<ResumeMeta[]>([]);
+  const [activeResume, setActiveResume] = useState<ResumeMeta | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const poll = useOptimizationPoll();
+
+  // Load saved resumes on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/resumes")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { resumes: ResumeMeta[] } | null) => {
+        if (!cancelled && j?.resumes) setResumes(j.resumes);
+      })
+      .catch(() => { /* ignore — picker just stays empty */ });
+    return () => { cancelled = true; };
+  }, []);
 
   function setField(key: keyof FormFields, value: string) {
     setFields((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function setResumeText(value: string) {
+    // Editing the textarea breaks the link to the selected saved resume —
+    // that way the edited content gets auto-saved as a new history entry.
+    setFields((prev) => ({ ...prev, resumeText: value, resumeId: undefined }));
+    setActiveResume(null);
+  }
+
+  async function pickResume(id: string) {
+    if (!id) return;
+    setUploadError(null);
+    try {
+      const res = await fetch(`/api/resumes/${id}`);
+      if (!res.ok) throw new Error("Could not load that resume");
+      const j = (await res.json()) as { resume: ResumeRecord };
+      setFields((prev) => ({ ...prev, resumeText: j.resume.content, resumeId: j.resume.id }));
+      setActiveResume({
+        id:        j.resume.id,
+        name:      j.resume.name,
+        source:    j.resume.source,
+        createdAt: j.resume.createdAt,
+      });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Failed to load resume");
+    }
+  }
+
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-uploading the same filename
+    if (!file) return;
+
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/resumes/upload", { method: "POST", body: fd });
+      const j = (await res.json()) as { resume?: ResumeRecord; error?: string };
+      if (!res.ok || !j.resume) throw new Error(j.error ?? "Upload failed");
+
+      setFields((prev) => ({ ...prev, resumeText: j.resume!.content, resumeId: j.resume!.id }));
+      setActiveResume({
+        id:        j.resume.id,
+        name:      j.resume.name,
+        source:    j.resume.source,
+        createdAt: j.resume.createdAt,
+      });
+      setResumes((prev) => [
+        { id: j.resume!.id, name: j.resume!.name, source: j.resume!.source, createdAt: j.resume!.createdAt },
+        ...prev,
+      ]);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function clearActiveResume() {
+    setActiveResume(null);
+    setFields((prev) => ({ ...prev, resumeId: undefined }));
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -290,16 +387,106 @@ export function OptimizerForm() {
         <CardHeader>
           <CardTitle style={{ color: "var(--text-primary)" }}>Your Resume</CardTitle>
           <CardDescription style={{ color: "var(--text-muted)" }}>
-            Paste your current resume as plain text or Markdown.
+            Upload a PDF or DOCX, pick a saved resume, or paste plain text/Markdown below.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-3">
+          {/* Upload + saved-resume picker */}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="gap-1.5"
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {uploading ? "Extracting…" : "Upload PDF / DOCX"}
+            </Button>
+
+            {resumes.length > 0 && (
+              <select
+                value={activeResume?.id ?? ""}
+                onChange={(e) => pickResume(e.target.value)}
+                className="h-9 rounded-md border px-2 text-sm"
+                style={{
+                  background:  "var(--bg-base)",
+                  color:       "var(--text-primary)",
+                  borderColor: "var(--border-default)",
+                }}
+              >
+                <option value="">Use a saved resume…</option>
+                {resumes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} · {r.source.toLowerCase()} · {new Date(r.createdAt).toLocaleDateString()}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <span className="ml-auto text-xs" style={{ color: "var(--text-muted)" }}>
+              Max 5 MB
+            </span>
+          </div>
+
+          {/* Active source badge */}
+          {activeResume && (
+            <div
+              className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs"
+              style={{
+                background:  "color-mix(in srgb, var(--accent-primary) 8%, transparent)",
+                borderColor: "var(--border-default)",
+                color:       "var(--text-secondary)",
+              }}
+            >
+              <FileText className="h-3.5 w-3.5" style={{ color: "var(--accent-primary)" }} />
+              <span>
+                From{" "}
+                <span style={{ color: "var(--text-primary)" }} className="font-medium">
+                  {activeResume.name}
+                </span>{" "}
+                · {activeResume.source.toLowerCase()}
+              </span>
+              <button
+                type="button"
+                onClick={clearActiveResume}
+                className="ml-auto inline-flex items-center"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Clear source"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Upload error */}
+          {uploadError && (
+            <div
+              className="rounded-md border px-3 py-2 text-xs"
+              style={{
+                background:  "color-mix(in srgb, var(--state-error) 10%, transparent)",
+                borderColor: "var(--state-error)",
+                color:       "var(--state-error)",
+              }}
+            >
+              {uploadError}
+            </div>
+          )}
+
           <Textarea
             required
             minLength={50}
             placeholder="John Smith&#10;john@example.com | github.com/jsmith&#10;&#10;## Experience&#10;Senior Engineer at Acme Corp (2021–present)…"
             value={fields.resumeText}
-            onChange={(e) => setField("resumeText", e.target.value)}
+            onChange={(e) => setResumeText(e.target.value)}
             className="min-h-52 font-mono text-sm resize-y"
           />
         </CardContent>

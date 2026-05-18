@@ -20,7 +20,33 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  runs OptimizationRun[]
+  runs    OptimizationRun[]
+  resumes Resume[]
+}
+
+// ─── Resume ───────────────────────────────────────────────────────────────────
+// A user's saved resume — either text they pasted into the optimizer, or text
+// extracted from an uploaded PDF/DOCX. Unlimited history per user.
+// `content` stores the extracted plain text (not the original binary).
+model Resume {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String       // filename if uploaded; "Pasted <ISO date>" if typed
+  source    ResumeSource
+  content   String       // extracted plain text — postgres text by default
+
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+enum ResumeSource {
+  TEXT
+  PDF
+  DOCX
 }
 
 // ─── OptimizationRun ──────────────────────────────────────────────────────────

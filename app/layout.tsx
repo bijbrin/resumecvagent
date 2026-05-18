@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { FeatureRequestButton } from "@/components/feature-request-button";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,7 +33,10 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased${isDark ? " dark" : ""}`}
     >
       <body className="min-h-full flex flex-col">
-        <ClerkProvider afterSignOutUrl="/">{children}</ClerkProvider>
+        <ClerkProvider afterSignOutUrl="/">
+          {children}
+          <FeatureRequestButton />
+        </ClerkProvider>
       </body>
     </html>
   );

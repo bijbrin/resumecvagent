@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Trash2, ExternalLink, MapPin, Shield, Link2 } from "lucide-react";
 import {
@@ -24,9 +24,13 @@ function remoteLabel(remote: boolean | null | undefined): string | null {
 }
 
 export function SearchHistory() {
-  const [entries, setEntries] = useState<SearchHistoryEntry[]>(() =>
-    getHistory().slice(0, 5)
-  );
+  // Read from localStorage only after mount so SSR and the first client render
+  // agree on an empty list — otherwise we hit a hydration mismatch.
+  const [entries, setEntries] = useState<SearchHistoryEntry[]>([]);
+
+  useEffect(() => {
+    setEntries(getHistory().slice(0, 5));
+  }, []);
 
   if (entries.length === 0) return null;
 

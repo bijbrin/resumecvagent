@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Loader2,
@@ -543,6 +543,34 @@ function SourceGrid({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const CACHE_KEY = "job-scraper-cache";
+const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 4; // 4 hours
+
+function loadCachedData(): { data: ScrapeResult; timestamp: number } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed.data || !parsed.timestamp) return null;
+    const age = Date.now() - parsed.timestamp;
+    if (age > CACHE_MAX_AGE_MS) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedData(data: ScrapeResult) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export default function JobScraperPage() {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -555,6 +583,15 @@ export default function JobScraperPage() {
 
   // Modal
   const [modalJob, setModalJob] = useState<ExtractedJob | null>(null);
+
+  // Load cached scan results on mount
+  useEffect(() => {
+    const cached = loadCachedData();
+    if (cached) {
+      setData(cached.data);
+      setStatus("done");
+    }
+  }, []);
 
   async function handleScrape() {
     setStatus("loading");
@@ -569,6 +606,7 @@ export default function JobScraperPage() {
       const json = (await res.json()) as ScrapeResult;
       setData(json);
       setStatus("done");
+      saveCachedData(json);
     } catch {
       setError("Network error — please try again.");
       setStatus("error");
@@ -583,30 +621,48 @@ export default function JobScraperPage() {
       const res = await fetch("/api/job-scraper/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: job.url, source: job.source }),
+        body: JSON.stringify({
+          url: job.url,
+          source: job.source,
+          existing: job, // pass existing data as fallback
+        }),
       });
 
       if (!res.ok) {
-        setJobStates((prev) => ({ ...prev, [url]: "error" }));
+        // Even on error, try to use existing data
+        setExtractedMap((prev) => ({
+          ...prev,
+          [url]: { ...job, description: job.description || "No detailed description available." },
+        }));
+        setJobStates((prev) => ({ ...prev, [url]: "done" }));
         return;
       }
 
       const json = await res.json();
       if (!json.job) {
-        setJobStates((prev) => ({ ...prev, [url]: "error" }));
+        setExtractedMap((prev) => ({
+          ...prev,
+          [url]: { ...job, description: job.description || "No detailed description available." },
+        }));
+        setJobStates((prev) => ({ ...prev, [url]: "done" }));
         return;
       }
 
       const extracted: ExtractedJob = {
         ...job,
         ...json.job,
-        description: json.job.description || "No description available.",
+        description: json.job.description || job.description || "No detailed description available.",
       };
 
       setExtractedMap((prev) => ({ ...prev, [url]: extracted }));
       setJobStates((prev) => ({ ...prev, [url]: "done" }));
     } catch {
-      setJobStates((prev) => ({ ...prev, [url]: "error" }));
+      // On network error, still show the card with existing data
+      setExtractedMap((prev) => ({
+        ...prev,
+        [url]: { ...job, description: job.description || "No detailed description available." },
+      }));
+      setJobStates((prev) => ({ ...prev, [url]: "done" }));
     }
   }
 
@@ -673,16 +729,42 @@ export default function JobScraperPage() {
         </Button>
 
         {status === "done" && data && (
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            Found{" "}
-            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              {total}
-            </span>{" "}
-            job{total !== 1 ? "s" : ""}{" "}
-            <span style={{ color: "var(--text-faint)" }}>
-              · {new Date(data.scrapedAt).toLocaleTimeString("en-AU")}
-            </span>
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Found{" "}
+              <span className="font-semibold" style={{ color: "var(--text-primary)" }}>
+                {total}
+              </span>{" "}
+              job{total !== 1 ? "s" : ""}{" "}
+              <span style={{ color: "var(--text-faint)" }}>
+                · {new Date(data.scrapedAt).toLocaleTimeString("en-AU")}
+              </span>
+            </p>
+            {(() => {
+              try {
+                const raw = localStorage.getItem(CACHE_KEY);
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  if (parsed.data?.scrapedAt === data.scrapedAt) {
+                    const ageMin = Math.floor((Date.now() - parsed.timestamp) / 60000);
+                    return (
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border"
+                        style={{
+                          background: "color-mix(in srgb, var(--accent-primary) 10%, transparent)",
+                          borderColor: "color-mix(in srgb, var(--accent-primary) 25%, transparent)",
+                          color: "var(--accent-primary)",
+                        }}
+                      >
+                        Cached · {ageMin < 60 ? `${ageMin}m ago` : `${Math.floor(ageMin / 60)}h ago`}
+                      </span>
+                    );
+                  }
+                }
+              } catch { /* ignore */ }
+              return null;
+            })()}
+          </div>
         )}
       </div>
 

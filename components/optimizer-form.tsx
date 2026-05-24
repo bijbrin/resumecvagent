@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, type FormEvent, type ChangeEvent } from "react";
-import { Upload, FileText, Loader2, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Upload, FileText, Loader2, X, Sparkles, AlertCircle, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -273,6 +274,7 @@ function useOptimizationPoll() {
 // ── Main form ─────────────────────────────────────────────────────────────────
 
 export function OptimizerForm() {
+  const searchParams = useSearchParams();
   const [fields, setFields] = useState<FormFields>({
     resumeText: "",
     jobUrl: "",
@@ -282,6 +284,7 @@ export function OptimizerForm() {
   const [activeResume, setActiveResume] = useState<ResumeMeta | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [prefilledFromUrl, setPrefilledFromUrl] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const poll = useOptimizationPoll();
 
@@ -291,11 +294,52 @@ export function OptimizerForm() {
     fetch("/api/resumes")
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { resumes: ResumeMeta[] } | null) => {
-        if (!cancelled && j?.resumes) setResumes(j.resumes);
+        if (!cancelled && j?.resumes) {
+          setResumes(j.resumes);
+          // Auto-select the most recent resume if none selected yet
+          if (j.resumes.length > 0 && !activeResume && fields.resumeText === "") {
+            const mostRecent = j.resumes[0];
+            fetch(`/api/resumes/${mostRecent.id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .then((data: { resume: ResumeRecord } | null) => {
+                if (!cancelled && data?.resume) {
+                  setFields((prev) => ({
+                    ...prev,
+                    resumeText: data.resume.content,
+                    resumeId: data.resume.id,
+                  }));
+                  setActiveResume({
+                    id: data.resume.id,
+                    name: data.resume.name,
+                    source: data.resume.source,
+                    createdAt: data.resume.createdAt,
+                  });
+                }
+              })
+              .catch(() => {});
+          }
+        }
       })
       .catch(() => { /* ignore — picker just stays empty */ });
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Pre-fill from URL query params (coming from job-scraper)
+  useEffect(() => {
+    const jobUrl = searchParams.get("jobUrl");
+    const jobDesc = searchParams.get("jobDesc");
+    const jobTitle = searchParams.get("jobTitle");
+
+    if (jobUrl) {
+      setFields((prev) => ({
+        ...prev,
+        jobUrl,
+        jobDescriptionText: jobDesc || prev.jobDescriptionText,
+      }));
+      setPrefilledFromUrl(true);
+    }
+  }, [searchParams]);
 
   function setField(key: keyof FormFields, value: string) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -382,6 +426,73 @@ export function OptimizerForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6 w-full max-w-2xl">
+      {/* Pre-filled banner */}
+      {prefilledFromUrl && (
+        <div
+          className="rounded-xl border px-4 py-3 flex items-center gap-3"
+          style={{
+            background: "color-mix(in srgb, var(--accent-primary) 8%, transparent)",
+            borderColor: "color-mix(in srgb, var(--accent-primary) 30%, transparent)",
+          }}
+        >
+          <Sparkles className="size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              Job details loaded from scanner
+            </p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {searchParams.get("jobTitle")} · {searchParams.get("jobCompany")}
+            </p>
+          </div>
+          {fields.resumeText.length >= 50 ? (
+            <Button
+              type="submit"
+              disabled={poll.isLoading}
+              size="sm"
+              className="gap-1.5 shrink-0"
+              style={{ background: "var(--accent-primary)", color: "#fff" }}
+            >
+              {poll.isLoading ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Working…
+                </>
+              ) : (
+                <>
+                  <Wand2 className="size-3.5" />
+                  Auto-Optimize
+                </>
+              )}
+            </Button>
+          ) : (
+            <span className="text-xs font-medium shrink-0" style={{ color: "var(--state-warn)" }}>
+              Add resume first →
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* No resume warning */}
+      {prefilledFromUrl && fields.resumeText.length < 50 && resumes.length === 0 && (
+        <div
+          className="rounded-xl border px-4 py-3 flex items-start gap-3"
+          style={{
+            background: "color-mix(in srgb, var(--state-warn) 8%, transparent)",
+            borderColor: "color-mix(in srgb, var(--state-warn) 30%, transparent)",
+          }}
+        >
+          <AlertCircle className="size-5 shrink-0 mt-0.5" style={{ color: "var(--state-warn)" }} />
+          <div>
+            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              No resume found
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+              Upload a PDF/DOCX or paste your resume below before optimizing.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Resume section */}
       <Card style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
         <CardHeader>

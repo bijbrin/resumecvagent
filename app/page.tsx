@@ -1,6 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { MobileNav } from "@/components/mobile-nav";
+import { AnimatedSection, StaggerContainer } from "@/hooks/use-in-view";
 import { Playfair_Display } from "next/font/google";
 
 const playfair = Playfair_Display({
@@ -129,7 +131,15 @@ export default async function Home() {
           border-radius: 16px;
           box-shadow: 0 32px 80px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.04);
           overflow: hidden;
-          width: 340px;
+          width: 100%;
+          max-width: 340px;
+        }
+
+        @media (max-width: 1023px) {
+          .agent-card { max-width: 300px; }
+        }
+        @media (max-width: 639px) {
+          .agent-card { max-width: 100%; }
         }
 
         .step-done { background: rgba(22,163,74,0.12); }
@@ -164,12 +174,12 @@ export default async function Home() {
           padding: 24px;
           border: 1px solid var(--border-default);
           background: var(--bg-surface);
-          transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+          transition: transform 0.25s cubic-bezier(.22,.68,0,1), border-color 0.25s ease, box-shadow 0.25s ease;
         }
         .feature-card:hover {
-          transform: translateY(-5px);
+          transform: translateY(-6px);
           border-color: rgba(37,99,235,0.4);
-          box-shadow: 0 16px 40px rgba(37,99,235,0.08);
+          box-shadow: 0 20px 50px rgba(37,99,235,0.1);
         }
 
         .testimonial-card {
@@ -178,7 +188,7 @@ export default async function Home() {
           border: 1px solid var(--border-default);
           background: var(--bg-base);
           box-shadow: var(--shadow-2);
-          transition: transform 0.22s ease;
+          transition: transform 0.25s cubic-bezier(.22,.68,0,1);
         }
         .testimonial-card:hover { transform: translateY(-4px); }
 
@@ -217,6 +227,9 @@ export default async function Home() {
           padding: 72px 48px;
           text-align: center;
         }
+        @media (max-width: 639px) {
+          .cta-dark { padding: 48px 24px; }
+        }
         .cta-dark::before {
           content: '';
           position: absolute;
@@ -244,24 +257,29 @@ export default async function Home() {
         .nav-link:hover { color: rgba(255,255,255,0.9); }
 
         .star-icon { fill: #f59e0b; }
+
+        /* Mobile nav link active states */
+        .mobile-nav-link { color: rgba(255,255,255,0.7); transition: color 0.15s; }
+        .mobile-nav-link:hover, .mobile-nav-link:active { color: rgba(255,255,255,0.95); }
       `}</style>
 
       <div className={`${playfair.variable} min-h-screen flex flex-col`} style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}>
 
         {/* ── HEADER ── */}
         <header style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 20 }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "18px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 9, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#2563eb] flex items-center justify-center flex-shrink-0">
                 <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="4" y="3" width="13" height="18" rx="2"/>
                   <path d="M8 8h6M8 12h6M8 16h4"/>
                 </svg>
               </div>
-              <span style={{ fontWeight: 650, fontSize: 15, color: "#fff", letterSpacing: "-0.02em" }}>Resume Optimizer</span>
+              <span className="font-semibold text-[15px] text-white tracking-tight">Resume Optimizer</span>
             </div>
 
-            <nav style={{ display: "flex", alignItems: "center", gap: 28 }}>
+            {/* Desktop nav */}
+            <nav className="hidden lg:flex items-center gap-7">
               <a href="#how-it-works" className="nav-link">How It Works</a>
               <a href="#features" className="nav-link">Features</a>
               <a href="#testimonials" className="nav-link">Reviews</a>
@@ -278,55 +296,58 @@ export default async function Home() {
                 </>
               )}
             </nav>
+
+            {/* Mobile nav */}
+            <MobileNav userId={userId} />
           </div>
         </header>
 
         {/* ── HERO ── */}
-        <section className="hero-section" style={{ minHeight: "100vh", display: "flex", alignItems: "center" }}>
+        <section className="hero-section min-h-[100dvh] flex items-center">
           <div className="hero-grid" />
           <div className="hero-vignette" />
 
-          <div style={{ position: "relative", zIndex: 10, maxWidth: 1200, margin: "0 auto", padding: "128px 32px 80px", width: "100%" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 64, alignItems: "center" }}>
+          <div className="relative z-10 max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 lg:pt-32 pb-16 sm:pb-20 w-full">
+            <div className="flex flex-col lg:grid lg:grid-cols-[1fr_auto] gap-10 lg:gap-16 items-center">
               {/* LEFT — Copy */}
-              <div style={{ maxWidth: 580 }}>
-                <div className="fade-up-1" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 14px", borderRadius: 99, border: "1px solid rgba(37,99,235,0.4)", background: "rgba(37,99,235,0.12)", color: "#93c5fd", fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 24 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#60a5fa", animation: "pulseGlow 2s ease-in-out infinite" }} />
+              <div className="max-w-[580px] w-full text-center lg:text-left">
+                <div className="fade-up-1 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full border border-[rgba(37,99,235,0.4)] bg-[rgba(37,99,235,0.12)] text-[#93c5fd] text-xs font-semibold tracking-wider uppercase mb-5 sm:mb-6">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#60a5fa] animate-pulse-soft" />
                   8 AI Agents · ATS Optimized · Free to Start
                 </div>
 
-                <h1 className="display-heading fade-up-2" style={{ fontSize: "clamp(2.6rem, 5vw, 4.25rem)", fontWeight: 900, lineHeight: 1.05, letterSpacing: "-0.035em", color: "#fff", marginBottom: 24 }}>
+                <h1 className="display-heading fade-up-2 text-[clamp(2.2rem,5.5vw,4.25rem)] font-black leading-[1.05] tracking-tight text-white mb-5 sm:mb-6">
                   Land Your<br />
-                  <span style={{ color: "#60a5fa" }}>Dream Job</span><br />
+                  <span className="text-[#60a5fa]">Dream Job</span><br />
                   Faster.
                 </h1>
 
-                <p className="fade-up-3" style={{ fontSize: "1.1rem", lineHeight: 1.7, color: "rgba(255,255,255,0.55)", marginBottom: 36, maxWidth: 460 }}>
+                <p className="fade-up-3 text-base sm:text-lg leading-relaxed text-white/55 mb-7 sm:mb-9 max-w-[460px] mx-auto lg:mx-0">
                   Paste a job URL and your resume. Eight specialized AI agents research the company, find every gap, and rewrite your materials — ATS-ready in under two minutes.
                 </p>
 
-                <div className="fade-up-4" style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <div className="fade-up-4 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 sm:gap-3.5">
                   {userId ? (
-                    <Link href="/optimizer" className="btn-cta">
+                    <Link href="/optimizer" className="btn-cta w-full sm:w-auto justify-center">
                       Open Optimizer
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </Link>
                   ) : (
                     <>
-                      <Link href="/sign-up" className="btn-cta">
+                      <Link href="/sign-up" className="btn-cta w-full sm:w-auto justify-center">
                         Get Started — Free
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                       </Link>
-                      <Link href="/sign-in" className="btn-ghost">
+                      <Link href="/sign-in" className="btn-ghost w-full sm:w-auto justify-center">
                         Sign in
                       </Link>
                     </>
                   )}
                 </div>
 
-                <div className="fade-up-5" style={{ display: "flex", alignItems: "center", gap: 24, marginTop: 28 }}>
-                  {["No credit card", "Results in &lt; 2 min", "ATS guaranteed"].map((t) => (
-                    <span key={t} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "rgba(255,255,255,0.35)" }}>
+                <div className="fade-up-5 flex flex-wrap items-center justify-center lg:justify-start gap-x-5 sm:gap-x-6 gap-y-2 mt-6 sm:mt-7">
+                  {["No credit card", "Results in < 2 min", "ATS guaranteed"].map((t) => (
+                    <span key={t} className="flex items-center gap-1.5 text-xs text-white/35">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(96,165,250,0.7)" strokeWidth="2.5"><path d="M20 6L9 17l-5-5"/></svg>
                       <span dangerouslySetInnerHTML={{ __html: t }} />
                     </span>
@@ -335,23 +356,23 @@ export default async function Home() {
               </div>
 
               {/* RIGHT — Floating agent card */}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div className="flex justify-center lg:justify-end w-full lg:w-auto mt-2 lg:mt-0">
                 <div className="hero-float">
-                  <div className="agent-card">
+                  <div className="agent-card mx-auto lg:mx-0">
                     {/* Window chrome */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(239,68,68,0.6)" }} />
-                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(234,179,8,0.6)" }} />
-                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(34,197,94,0.6)" }} />
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07]">
+                      <div className="flex gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-[rgba(239,68,68,0.6)]" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-[rgba(234,179,8,0.6)]" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-[rgba(34,197,94,0.6)]" />
                       </div>
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>agent-pipeline · running</span>
-                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", animation: "pulseGlow 2s ease-in-out infinite" }} />
+                      <span className="text-[11px] text-white/25 font-mono">agent-pipeline · running</span>
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse-soft" />
                     </div>
 
                     {/* Steps */}
-                    <div style={{ padding: "16px 14px 8px" }}>
-                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", fontFamily: "monospace", letterSpacing: "0.06em", marginBottom: 10, paddingLeft: 8 }}>AGENT PIPELINE</div>
+                    <div className="px-3.5 pt-4 pb-2">
+                      <div className="text-[10px] text-white/28 font-mono tracking-widest mb-2.5 pl-2">AGENT PIPELINE</div>
                       {[
                         { emoji: "🔍", label: "Scraping Job Description", state: "done" },
                         { emoji: "🏢", label: "Researching Company Culture", state: "done" },
@@ -362,19 +383,18 @@ export default async function Home() {
                       ].map((s) => (
                         <div
                           key={s.label}
-                          className={s.state === "done" ? "step-done" : s.state === "active" ? "step-active" : "step-pending"}
-                          style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 8, marginBottom: 4 }}
+                          className={`flex items-center gap-2 px-2.5 py-[7px] rounded-lg mb-1 ${s.state === "done" ? "step-done" : s.state === "active" ? "step-active" : "step-pending"}`}
                         >
-                          <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{s.emoji}</span>
-                          <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.72)", flex: 1 }}>{s.label}</span>
+                          <span className="text-sm leading-none flex-shrink-0">{s.emoji}</span>
+                          <span className="text-xs text-white/[0.72] flex-1">{s.label}</span>
                           {s.state === "done" && (
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" style={{ flexShrink: 0 }}><path d="M20 6L9 17l-5-5"/></svg>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" className="flex-shrink-0"><path d="M20 6L9 17l-5-5"/></svg>
                           )}
                           {s.state === "active" && (
-                            <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                              <div className="dot-bounce" style={{ width: 5, height: 5, borderRadius: "50%", background: "#60a5fa" }} />
-                              <div className="dot-bounce-2" style={{ width: 5, height: 5, borderRadius: "50%", background: "#60a5fa" }} />
-                              <div className="dot-bounce-3" style={{ width: 5, height: 5, borderRadius: "50%", background: "#60a5fa" }} />
+                            <div className="flex gap-[3px] flex-shrink-0">
+                              <div className="dot-bounce w-[5px] h-[5px] rounded-full bg-[#60a5fa]" />
+                              <div className="dot-bounce-2 w-[5px] h-[5px] rounded-full bg-[#60a5fa]" />
+                              <div className="dot-bounce-3 w-[5px] h-[5px] rounded-full bg-[#60a5fa]" />
                             </div>
                           )}
                         </div>
@@ -382,12 +402,12 @@ export default async function Home() {
                     </div>
 
                     {/* Progress */}
-                    <div style={{ padding: "10px 16px 16px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,0.28)", marginBottom: 6 }}>
+                    <div className="px-4 pb-4 pt-1">
+                      <div className="flex justify-between text-[11px] text-white/28 mb-1.5">
                         <span>Progress</span><span>40%</span>
                       </div>
-                      <div style={{ height: 5, borderRadius: 99, background: "rgba(255,255,255,0.08)" }}>
-                        <div className="progress-bar" style={{ width: "40%" }} />
+                      <div className="h-[5px] rounded-full bg-white/[0.08]">
+                        <div className="progress-bar w-[40%]" />
                       </div>
                     </div>
                   </div>
@@ -397,61 +417,61 @@ export default async function Home() {
           </div>
 
           {/* Bottom gradient bleed */}
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 80, background: "linear-gradient(to bottom, transparent, var(--bg-base))", pointerEvents: "none" }} />
+          <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-b from-transparent to-[var(--bg-base)] pointer-events-none" />
         </section>
 
         {/* ── TRUSTED BY ── */}
-        <section style={{ padding: "48px 32px", borderBottom: "1px solid var(--border-default)" }}>
-          <div style={{ maxWidth: 900, margin: "0 auto" }}>
-            <p style={{ textAlign: "center", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 28 }}>
+        <AnimatedSection className="py-10 sm:py-12 px-4 sm:px-6 lg:px-8 border-b border-[var(--border-default)]">
+          <div className="max-w-[900px] mx-auto">
+            <p className="text-center text-[11px] font-bold tracking-[0.1em] uppercase text-[var(--text-faint)] mb-6 sm:mb-7">
               Trusted by professionals at leading companies
             </p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 48, flexWrap: "wrap" }}>
+            <div className="flex items-center justify-center gap-6 sm:gap-10 lg:gap-12 flex-wrap">
               {["Stripe", "Figma", "Notion", "Linear", "Vercel", "Supabase"].map((c) => (
                 <span key={c} className="company-name">{c}</span>
               ))}
             </div>
           </div>
-        </section>
+        </AnimatedSection>
 
         {/* ── HOW IT WORKS ── */}
-        <section id="how-it-works" style={{ padding: "96px 32px", background: "var(--bg-surface)" }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 64 }}>
+        <section id="how-it-works" className="py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8" style={{ background: "var(--bg-surface)" }}>
+          <div className="max-w-[1100px] mx-auto">
+            <AnimatedSection className="text-center mb-12 sm:mb-16">
               <div className="pill-label">How It Works</div>
-              <h2 className="display-heading" style={{ fontSize: "clamp(1.9rem, 3.5vw, 2.875rem)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", lineHeight: 1.15 }}>
-                From job post to offer-ready<br />in three steps.
+              <h2 className="display-heading text-[clamp(1.7rem,3.5vw,2.875rem)] font-bold tracking-tight text-[var(--text-primary)] leading-tight">
+                From job post to offer-ready<br className="hidden sm:block" /> in three steps.
               </h2>
-            </div>
+            </AnimatedSection>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
+            <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6" staggerDelay={0.1}>
               {[
                 { num: "01", icon: "📋", title: "Paste Your Resume", desc: "Upload or paste your current resume and the job posting URL you're targeting. That's all you need to start." },
                 { num: "02", icon: "⚡", title: "AI Does the Work", desc: "Eight specialized agents run in parallel — researching the company, analyzing gaps, and building a tailored strategy." },
                 { num: "03", icon: "🎯", title: "Download & Apply", desc: "Receive an ATS-optimized resume, personalized cover letter, and an interview prep cheat sheet. Apply with confidence." },
               ].map((s) => (
-                <div key={s.num} style={{ background: "var(--bg-base)", border: "1px solid var(--border-default)", borderRadius: 14, padding: 32, boxShadow: "var(--shadow-1)" }}>
+                <div key={s.num} className="bg-[var(--bg-base)] border border-[var(--border-default)] rounded-[14px] p-6 sm:p-8 shadow-[var(--shadow-1)] hover-lift">
                   <div className="step-num">{s.num}</div>
-                  <div style={{ fontSize: 26, margin: "8px 0 12px" }}>{s.icon}</div>
-                  <h3 style={{ fontSize: 17, fontWeight: 650, letterSpacing: "-0.02em", color: "var(--text-primary)", marginBottom: 10 }}>{s.title}</h3>
-                  <p style={{ fontSize: 14, lineHeight: 1.65, color: "var(--text-muted)" }}>{s.desc}</p>
+                  <div className="text-2xl mt-2 mb-3">{s.icon}</div>
+                  <h3 className="text-base sm:text-[17px] font-semibold tracking-tight text-[var(--text-primary)] mb-2.5">{s.title}</h3>
+                  <p className="text-sm leading-relaxed text-[var(--text-muted)]">{s.desc}</p>
                 </div>
               ))}
-            </div>
+            </StaggerContainer>
           </div>
         </section>
 
         {/* ── FEATURES ── */}
-        <section id="features" style={{ padding: "96px 32px" }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 64 }}>
+        <section id="features" className="py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1100px] mx-auto">
+            <AnimatedSection className="text-center mb-12 sm:mb-16">
               <div className="pill-label">8 AI Agents</div>
-              <h2 className="display-heading" style={{ fontSize: "clamp(1.9rem, 3.5vw, 2.875rem)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", lineHeight: 1.15 }}>
-                Every agent has one job.<br />Together, they&apos;re unstoppable.
+              <h2 className="display-heading text-[clamp(1.7rem,3.5vw,2.875rem)] font-bold tracking-tight text-[var(--text-primary)] leading-tight">
+                Every agent has one job.<br className="hidden sm:block" /> Together, they&apos;re unstoppable.
               </h2>
-            </div>
+            </AnimatedSection>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 18 }}>
+            <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-[18px]" staggerDelay={0.08}>
               {[
                 { icon: "🔍", title: "Job Intelligence", desc: "Parses any job posting URL to extract requirements, culture signals, and the hidden ATS keywords that most applicants miss." },
                 { icon: "🏢", title: "Company Research", desc: "Deep-dives into company culture, values, and hiring patterns to make every line of your application feel specifically written for them." },
@@ -461,26 +481,26 @@ export default async function Home() {
                 { icon: "🎯", title: "Interview Prep", desc: "Generates a personalized cheat sheet of likely questions, ideal talking points, and stories to prep — based on the exact role." },
               ].map((f) => (
                 <div key={f.title} className="feature-card">
-                  <div style={{ fontSize: 24, marginBottom: 14 }}>{f.icon}</div>
-                  <h3 style={{ fontSize: 15.5, fontWeight: 650, letterSpacing: "-0.015em", color: "var(--text-primary)", marginBottom: 8 }}>{f.title}</h3>
-                  <p style={{ fontSize: 13.5, lineHeight: 1.65, color: "var(--text-muted)" }}>{f.desc}</p>
+                  <div className="text-2xl mb-3.5">{f.icon}</div>
+                  <h3 className="text-[15.5px] font-semibold tracking-tight text-[var(--text-primary)] mb-2">{f.title}</h3>
+                  <p className="text-[13.5px] leading-relaxed text-[var(--text-muted)]">{f.desc}</p>
                 </div>
               ))}
-            </div>
+            </StaggerContainer>
           </div>
         </section>
 
         {/* ── TESTIMONIALS ── */}
-        <section id="testimonials" style={{ padding: "96px 32px", background: "var(--bg-surface)" }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 64 }}>
+        <section id="testimonials" className="py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8" style={{ background: "var(--bg-surface)" }}>
+          <div className="max-w-[1100px] mx-auto">
+            <AnimatedSection className="text-center mb-12 sm:mb-16">
               <div className="pill-label">Reviews</div>
-              <h2 className="display-heading" style={{ fontSize: "clamp(1.9rem, 3.5vw, 2.875rem)", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", lineHeight: 1.15 }}>
-                Real results from<br />real job seekers.
+              <h2 className="display-heading text-[clamp(1.7rem,3.5vw,2.875rem)] font-bold tracking-tight text-[var(--text-primary)] leading-tight">
+                Real results from<br className="hidden sm:block" /> real job seekers.
               </h2>
-            </div>
+            </AnimatedSection>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 22 }}>
+            <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-[22px]" staggerDelay={0.1}>
               {[
                 {
                   quote: "I got 3× more callbacks after using this. The AI found ATS keywords I had no idea even existed. Landed an offer within two weeks of optimizing.",
@@ -508,80 +528,82 @@ export default async function Home() {
                 },
               ].map((t) => (
                 <div key={t.name} className="testimonial-card">
-                  <div style={{ display: "flex", gap: 3, marginBottom: 16 }}>
+                  <div className="flex gap-[3px] mb-4">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <svg key={i} width="14" height="14" viewBox="0 0 24 24"><path className="star-icon" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                     ))}
                   </div>
-                  <p style={{ fontSize: 14.5, lineHeight: 1.7, color: "var(--text-secondary)", marginBottom: 22 }}>&ldquo;{t.quote}&rdquo;</p>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: "50%", background: t.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                  <p className="text-sm sm:text-[14.5px] leading-relaxed text-[var(--text-secondary)] mb-5 sm:mb-6">&ldquo;{t.quote}&rdquo;</p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: t.color }}>
                       {t.avatar}
                     </div>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 650, color: "var(--text-primary)" }}>{t.name}</div>
-                      <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>{t.role} · {t.company}</div>
+                      <div className="text-sm font-semibold text-[var(--text-primary)]">{t.name}</div>
+                      <div className="text-xs text-[var(--text-muted)]">{t.role} · {t.company}</div>
                     </div>
                   </div>
                 </div>
               ))}
-            </div>
+            </StaggerContainer>
           </div>
         </section>
 
         {/* ── FINAL CTA ── */}
-        <section style={{ padding: "80px 32px" }}>
-          <div style={{ maxWidth: 860, margin: "0 auto" }}>
-            <div className="cta-dark">
-              <div style={{ position: "relative", zIndex: 1 }}>
-                <h2 className="display-heading" style={{ fontSize: "clamp(1.9rem, 3.5vw, 3rem)", fontWeight: 900, letterSpacing: "-0.035em", color: "#fff", lineHeight: 1.1, marginBottom: 18 }}>
-                  Your next job is one<br />optimized resume away.
-                </h2>
-                <p style={{ fontSize: "1.05rem", lineHeight: 1.7, color: "rgba(255,255,255,0.45)", marginBottom: 36, maxWidth: 480, margin: "0 auto 36px" }}>
-                  Join thousands of professionals who&apos;ve transformed their interview rate with AI-powered resume optimization.
-                </p>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {userId ? (
-                    <Link href="/optimizer" className="btn-cta" style={{ fontSize: 16, padding: "14px 40px" }}>
-                      Open Optimizer →
-                    </Link>
-                  ) : (
-                    <Link href="/sign-up" className="btn-cta" style={{ fontSize: 16, padding: "14px 40px" }}>
-                      Get Started — It&apos;s Free →
-                    </Link>
-                  )}
+        <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[860px] mx-auto">
+            <AnimatedSection>
+              <div className="cta-dark">
+                <div className="relative z-[1]">
+                  <h2 className="display-heading text-[clamp(1.7rem,3.5vw,3rem)] font-black tracking-tight text-white leading-tight mb-4 sm:mb-5">
+                    Your next job is one<br className="hidden sm:block" /> optimized resume away.
+                  </h2>
+                  <p className="text-sm sm:text-base leading-relaxed text-white/45 mb-7 sm:mb-9 max-w-[480px] mx-auto">
+                    Join thousands of professionals who&apos;ve transformed their interview rate with AI-powered resume optimization.
+                  </p>
+                  <div className="flex items-center justify-center">
+                    {userId ? (
+                      <Link href="/optimizer" className="btn-cta text-base px-8 sm:px-10 py-3.5 sm:py-3">
+                        Open Optimizer →
+                      </Link>
+                    ) : (
+                      <Link href="/sign-up" className="btn-cta text-base px-8 sm:px-10 py-3.5 sm:py-3">
+                        Get Started — It&apos;s Free →
+                      </Link>
+                    )}
+                  </div>
+                  <p className="text-xs text-white/22 mt-4">
+                    No credit card · Results in under 2 minutes
+                  </p>
                 </div>
-                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.22)", marginTop: 16 }}>
-                  No credit card · Results in under 2 minutes
-                </p>
               </div>
-            </div>
+            </AnimatedSection>
           </div>
         </section>
 
         {/* ── FOOTER ── */}
-        <footer style={{ borderTop: "1px solid var(--border-default)", padding: "56px 32px 32px" }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 40, marginBottom: 48 }}>
+        <footer className="border-t border-[var(--border-default)] pt-12 sm:pt-14 pb-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1100px] mx-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 sm:gap-10 mb-10 sm:mb-12">
               {/* Brand */}
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: "var(--accent-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div className="col-span-2 sm:col-span-1">
+                <div className="flex items-center gap-2.5 mb-3.5">
+                  <div className="w-[30px] h-[30px] rounded-lg bg-[var(--accent-primary)] flex items-center justify-center">
                     <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="4" y="3" width="13" height="18" rx="2"/>
                       <path d="M8 8h6M8 12h6M8 16h4"/>
                     </svg>
                   </div>
-                  <span style={{ fontWeight: 650, fontSize: 14.5, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Resume Optimizer</span>
+                  <span className="font-semibold text-[14.5px] text-[var(--text-primary)] tracking-tight">Resume Optimizer</span>
                 </div>
-                <p style={{ fontSize: 13.5, lineHeight: 1.65, color: "var(--text-muted)", maxWidth: 210 }}>
+                <p className="text-[13.5px] leading-relaxed text-[var(--text-muted)] max-w-[210px]">
                   AI-powered resume optimization for modern job seekers. ATS-ready in minutes.
                 </p>
               </div>
 
               {/* Product */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 14 }}>Product</div>
+                <div className="text-[11px] font-bold tracking-[0.08em] uppercase text-[var(--text-faint)] mb-3.5">Product</div>
                 {["Optimizer", "Job Scraper", "History", "API Docs"].map((item) => (
                   <a key={item} href="#" className="footer-link">{item}</a>
                 ))}
@@ -589,7 +611,7 @@ export default async function Home() {
 
               {/* Company */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 14 }}>Company</div>
+                <div className="text-[11px] font-bold tracking-[0.08em] uppercase text-[var(--text-faint)] mb-3.5">Company</div>
                 {["About", "Blog", "Careers", "Contact"].map((item) => (
                   <a key={item} href="#" className="footer-link">{item}</a>
                 ))}
@@ -597,18 +619,18 @@ export default async function Home() {
 
               {/* Legal */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 14 }}>Legal</div>
+                <div className="text-[11px] font-bold tracking-[0.08em] uppercase text-[var(--text-faint)] mb-3.5">Legal</div>
                 {["Privacy Policy", "Terms of Service", "Cookie Policy"].map((item) => (
                   <a key={item} href="#" className="footer-link">{item}</a>
                 ))}
               </div>
             </div>
 
-            <div style={{ paddingTop: 24, borderTop: "1px solid var(--border-default)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <p style={{ fontSize: 12.5, color: "var(--text-faint)" }}>© 2025 Resume Optimizer. All rights reserved.</p>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div className="pt-5 sm:pt-6 border-t border-[var(--border-default)] flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-xs sm:text-[12.5px] text-[var(--text-faint)] text-center sm:text-left">© 2025 Resume Optimizer. All rights reserved.</p>
+              <div className="flex items-center gap-4">
                 <ThemeToggle />
-                <span className="mono" style={{ fontSize: 11.5, color: "var(--text-faint)" }}>v1.0</span>
+                <span className="mono text-[11.5px] text-[var(--text-faint)]">v1.0</span>
               </div>
             </div>
           </div>

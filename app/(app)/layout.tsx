@@ -1,12 +1,13 @@
 import { UserButton } from "@clerk/nextjs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
+import { MobileNav } from "@/components/mobile-nav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg-base)" }}>
       <header
-        className="sticky top-0 z-10 flex items-center justify-between px-7 py-3.5 border-b"
+        className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 lg:px-7 py-3 border-b"
         style={{ background: "var(--bg-base)", borderColor: "var(--border-default)" }}
       >
         <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
@@ -20,8 +21,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </span>
         </Link>
 
-        <div className="flex items-center gap-4">
-          <nav className="flex items-center gap-4 text-[13.5px]" style={{ color: "var(--text-secondary)" }}>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <nav className="hidden md:flex items-center gap-4 text-[13.5px]" style={{ color: "var(--text-secondary)" }}>
             <Link href="/optimizer" className="hover:text-[var(--text-primary)] transition-colors">
               Optimizer
             </Link>
@@ -32,8 +33,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               Job Scraper
             </Link>
           </nav>
-          <ThemeToggle />
-          <UserButton />
+          <div className="hidden md:block">
+            <ThemeToggle />
+          </div>
+          <div className="hidden md:block">
+            <UserButton />
+          </div>
+          <div className="md:hidden">
+            <MobileNav userId="app" />
+          </div>
         </div>
       </header>
 

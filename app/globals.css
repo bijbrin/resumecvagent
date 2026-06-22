@@ -7,9 +7,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-work-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-heading: var(--font-darker-grotesque);
+  --font-display: var(--font-darker-grotesque);
+  --color-accent-secondary: var(--accent-secondary);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -56,18 +58,18 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.52 0.245 285);
+  --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent: oklch(0.96 0.03 285);
+  --accent-foreground: oklch(0.52 0.245 285);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: oklch(0.52 0.245 285);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -85,21 +87,27 @@
 
   /* ─── App design tokens — light ─────────────────────────────────────── */
   --bg-base:        #ffffff;
-  --bg-surface:     #f7f7f8;
-  --bg-surface-2:   #f3f3f5;
-  --text-primary:   #111827;
-  --text-secondary: #374151;
-  --text-muted:     #6b7280;
-  --text-faint:     #9ca3af;
-  --accent-primary: #2563eb;
+  --bg-surface:     #f6f5fb;
+  --bg-surface-2:   #efedf9;
+  --text-primary:   #0e0e0e;
+  --text-secondary: #292929;
+  --text-muted:     #6b6b73;
+  --text-faint:     #9a9aa3;
+  --accent-primary: #6843EC;
+  --accent-secondary: #5fb800;            /* readable green for light bg */
+  --accent-lime:    #D2FF3A;
   --accent-soft:    color-mix(in srgb, var(--accent-primary) 10%, white);
   --accent-softer:  color-mix(in srgb, var(--accent-primary) 5%, white);
-  --accent-text:    color-mix(in srgb, var(--accent-primary) 80%, #0b1220);
-  --border-default: #e5e7eb;
-  --border-strong:  #d1d5db;
+  --accent-text:    color-mix(in srgb, var(--accent-primary) 85%, #0e0e0e);
+  --accent-gradient: linear-gradient(120deg, #6843EC 0%, #9b7bff 100%);
+  --border-default: #e7e4f2;
+  --border-strong:  #d6d1ea;
   --state-error:    #dc2626;
   --state-success:  #16a34a;
   --state-warn:     #d97706;
+  --state-warning:  #d97706;            /* alias used by app components */
+  --text-on-accent: #ffffff;            /* text/icons sitting on accent fills */
+  --paper:          #ffffff;            /* rendered document (resume) preview */
 
   /* ─── Radii ─────────────────────────────────────────────────────────── */
   --r-sm: 6px;
@@ -122,55 +130,61 @@
 
 /* ─── shadcn dark tokens ────────────────────────────────────────────────── */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  --background: oklch(0.16 0 0);
+  --foreground: oklch(0.98 0 0);
   --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
+  --card-foreground: oklch(0.98 0 0);
   --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+  --primary: oklch(0.58 0.235 285);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.26 0 0);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.26 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.32 0.12 285);
+  --accent-foreground: oklch(0.98 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.58 0.235 285);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar: oklch(0.18 0 0);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.58 0.235 285);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.26 0 0);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.58 0.235 285);
 
-  /* ─── App design tokens — dark ──────────────────────────────────────── */
-  --bg-base:        #0f172a;
-  --bg-surface:     #1e293b;
-  --bg-surface-2:   #334155;
-  --text-primary:   #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-muted:     #94a3b8;
-  --text-faint:     #64748b;
-  --accent-primary: #3b82f6;
-  --accent-soft:    color-mix(in srgb, var(--accent-primary) 15%, #1e293b);
-  --accent-softer:  color-mix(in srgb, var(--accent-primary) 8%, #0f172a);
-  --accent-text:    color-mix(in srgb, var(--accent-primary) 90%, white);
-  --border-default: #334155;
-  --border-strong:  #475569;
+  /* ─── App design tokens — dark (primary surface) ────────────────────── */
+  --bg-base:        #0E0E0E;
+  --bg-surface:     #181818;
+  --bg-surface-2:   #292929;
+  --text-primary:   #ffffff;
+  --text-secondary: #cfcfcf;
+  --text-muted:     #8f8f96;
+  --text-faint:     #5e5e66;
+  --accent-primary: #6843EC;
+  --accent-secondary: #D2FF3A;
+  --accent-lime:    #D2FF3A;
+  --accent-soft:    color-mix(in srgb, var(--accent-primary) 22%, #0E0E0E);
+  --accent-softer:  color-mix(in srgb, var(--accent-primary) 12%, #0E0E0E);
+  --accent-text:    color-mix(in srgb, var(--accent-primary) 55%, white);
+  --accent-gradient: linear-gradient(120deg, #6843EC 0%, #8b6bff 100%);
+  --border-default: #262626;
+  --border-strong:  #383838;
   --state-error:    #ef4444;
   --state-success:  #22c55e;
   --state-warn:     #f59e0b;
+  --state-warning:  #f59e0b;            /* alias used by app components */
+  --text-on-accent: #ffffff;            /* text/icons sitting on accent fills */
+  --paper:          #ffffff;            /* rendered document (resume) preview */
 
   /* ─── Shadows — softer on dark ───────────────────────────────────────── */
   --shadow-1: 0 1px 0 rgba(0,0,0,.2), 0 1px 2px rgba(0,0,0,.2);
@@ -207,7 +221,7 @@
     @apply bg-background text-foreground;
     background: var(--bg-base);
     color: var(--text-primary);
-    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    font-family: var(--font-work-sans), system-ui, sans-serif;
     font-size: var(--font-base);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
@@ -316,4 +330,80 @@
 .mono {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-feature-settings: "ss01", "tnum";
+}
+
+/* ─── Modern theme helpers (purple #6843EC / lime #D2FF3A) ─────────────────── */
+.font-display {
+  font-family: var(--font-darker-grotesque), system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Headings lean on Darker Grotesque for tall, punchy display type */
+h1, h2, h3, .heading {
+  font-family: var(--font-darker-grotesque), system-ui, sans-serif;
+  letter-spacing: -0.015em;
+}
+
+/* Gradient text — purple → soft violet */
+.text-gradient {
+  background: linear-gradient(110deg, #6843EC 0%, #a48bff 55%, #D2FF3A 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Primary gradient button */
+.btn-grad {
+  background: linear-gradient(120deg, #6843EC 0%, #8b6bff 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 8px 24px -6px rgba(104,67,236,0.55), inset 0 1px 0 rgba(255,255,255,0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.btn-grad:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.07);
+  box-shadow: 0 14px 36px -8px rgba(104,67,236,0.7), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+
+/* Lime accent pill / chip */
+.chip-lime {
+  background: color-mix(in srgb, var(--accent-lime) 16%, transparent);
+  color: var(--accent-lime);
+  border: 1px solid color-mix(in srgb, var(--accent-lime) 35%, transparent);
+}
+
+/* Glassy surface card (looks great on the dark base) */
+.glass {
+  background: color-mix(in srgb, var(--bg-surface) 70%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-2);
+}
+
+/* Soft purple radial glow — drop behind hero / cards */
+.glow-purple {
+  position: relative;
+}
+.glow-purple::after {
+  content: "";
+  position: absolute;
+  inset: -40% -20% auto -20%;
+  height: 80%;
+  background: radial-gradient(60% 60% at 50% 0%, rgba(104,67,236,0.35) 0%, transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Purple ring focus + lift on interactive cards */
+.lift {
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+.lift:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, transparent);
+  box-shadow: 0 20px 50px -16px rgba(104,67,236,0.35);
 }

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { getResumeGraph } from "@/lib/graph/resumeBuilder";
-import { createInitialState, type ResumeJobState } from "@/lib/state/resumeState";
-import { RunStatus, ResumeSource, Prisma } from "@/lib/generated/prisma/client";
+import { createInitialState } from "@/lib/state/resumeState";
+import { runGraphInBackground } from "@/lib/graph/runOptimization";
+import { RunStatus, ResumeSource } from "@/lib/generated/prisma/client";
 
 // Node.js runtime required: Prisma, LangGraph, and the LLM toolchain
 // need Node APIs that are unavailable in the Edge runtime.
@@ -150,86 +150,4 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
     { correlationId, status: "RUNNING" },
     { status: 202 },
   );
-}
-
-// ── Background graph execution ──────────────────────────────────────────────
-// Runs inside after() so the HTTP response is already sent. All DB updates
-// are best-effort — errors are logged but cannot be returned to the client.
-
-async function runGraphInBackground(
-  runId: string,
-  initialState: ResumeJobState,
-): Promise<void> {
-  const graph = getResumeGraph();
-
-  try {
-    let finalState: ResumeJobState | undefined;
-
-    // Stream the graph step-by-step so we can sync agentStatus to the DB
-    // after every node completion. This lets the status endpoint show live
-    // progress without SSE.
-    const stream = await graph.stream(initialState, { streamMode: "values" });
-
-    for await (const chunk of stream) {
-      const state = chunk as ResumeJobState;
-      finalState = state;
-
-      // Best-effort sync of live progress to the DB
-      try {
-        await prisma.optimizationRun.update({
-          where: { id: runId },
-          data: {
-            agentStatusJson: state.agentStatus as unknown as Prisma.InputJsonValue,
-            warnings:        state.warnings,
-          },
-        });
-      } catch (dbErr) {
-        console.warn("[optimize] agentStatus sync failed (non-fatal):", errorMessage(dbErr));
-      }
-    }
-
-    if (!finalState) {
-      throw new Error("Graph stream produced no final state");
-    }
-
-    // Persist the completed run
-    const result = {
-      optimizedResumeContent: finalState.optimizedResumeContent ?? null,
-      optimizedCoverLetter:   finalState.optimizedCoverLetter   ?? null,
-      interviewCheatsheet:    finalState.interviewCheatsheet    ?? null,
-      reportMarkdown:         finalState.reportMarkdown         ?? null,
-      fitScore:               finalState.tailoringStrategy?.fitScore ?? null,
-      warnings:               finalState.warnings,
-      companyResearch:        finalState.companyResearch        ?? null,
-      jobDetails:             finalState.jobDetails             ?? null,
-    };
-
-    await prisma.optimizationRun.update({
-      where: { id: runId },
-      data: {
-        status:      RunStatus.DONE,
-        completedAt: new Date(),
-        resultJson:  result as unknown as Prisma.InputJsonValue,
-        warnings:    finalState.warnings,
-      },
-    });
-
-    console.log("[optimize] run completed:", runId);
-  } catch (err) {
-    const msg = errorMessage(err);
-    console.error("[optimize] graph invocation failed:", msg);
-
-    // Mark the run as failed so the client stops polling
-    try {
-      await prisma.optimizationRun.update({
-        where: { id: runId },
-        data: {
-          status:   RunStatus.FAILED,
-          warnings: { push: `[background] Optimization failed: ${msg}` },
-        },
-      });
-    } catch (dbErr) {
-      console.error("[optimize] DB run update to FAILED failed:", errorMessage(dbErr));
-    }
-  }
 }

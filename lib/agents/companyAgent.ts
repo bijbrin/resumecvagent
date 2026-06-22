@@ -8,7 +8,8 @@ import {
 } from "../state/resumeState";
 import { structuredOutput, EXTRACTION_MODEL } from "../llm/anthropic";
 import { scrapeUrlRaw, findAboutPageUrl } from "../scraper/jobScraper";
-import { serperCompanySearch } from "../scraper/serperSearch";
+import { searchCompany } from "../scraper/companySearch";
+import { COMPANY_AGENT_SYSTEM_PROMPT as SYSTEM_PROMPT } from "./prompts";
 
 // ─── LLM extraction schema ────────────────────────────────────────────────────
 
@@ -20,15 +21,6 @@ const CompanyExtractSchema = z.object({
   cultureNotes: z.string().catch(""),
   recentNews:   z.array(z.string()).catch([]),
 });
-
-const SYSTEM_PROMPT = `You are a company research analyst preparing intel for a job application.
-Extract and synthesize company information from the research text provided.
-
-IMPORTANT:
-- mission: if not stated explicitly, synthesize one from the company's products, positioning, and tone. Never leave it blank.
-- values: if not listed, infer 3–5 values from the job description language and company activities.
-- cultureNotes: write 2–3 sentences a cover letter writer can quote directly about what it's like to work there.
-- recentNews: bullet-point summaries only — omit if no news was found in the research.`;
 
 function buildUserPrompt(companyName: string, researchText: string): string {
   return `Research the following company for a job application: "${companyName}"
@@ -59,10 +51,10 @@ function buildResearchText(
   companyName: string,
   homepageText: string,
   aboutPageText: string,
-  serperText: string,
+  searchText: string,
 ): string {
   const parts: string[] = [`Company: ${companyName}`];
-  if (serperText)    parts.push(`Web search results:\n${serperText.slice(0, 3_000)}`);
+  if (searchText)    parts.push(`Web search results:\n${searchText.slice(0, 3_000)}`);
   if (homepageText)  parts.push(`Homepage:\n${homepageText.slice(0, 2_500)}`);
   if (aboutPageText) parts.push(`About page:\n${aboutPageText.slice(0, 2_500)}`);
   return parts.join("\n\n---\n\n");
@@ -79,8 +71,25 @@ export async function companyAgentNode(
   state: ResumeJobState,
 ): Promise<Partial<ResumeJobState>> {
   const companyName = state.companyName;
-  const companyUrl  =
+
+  // ── Web search FIRST — discovers the official site + snippets ──────────────
+  // Searching up front lets us target the real domain (e.g. lifely.com.au)
+  // instead of blindly guessing "<name>.com", the usual scrape failure.
+  // searchCompany tries Firecrawl /search, then falls back to Serper.
+  let searchText = "";
+  let discoveredUrl: string | null = null;
+  if (companyName) {
+    const search = await searchCompany(companyName);
+    if (search) {
+      searchText    = search.text;
+      discoveredUrl = search.websiteUrl;
+    }
+  }
+
+  // Resolve the URL to scrape: user-provided > search-discovered > TLD guess.
+  const companyUrl =
     state.companyUrl ||
+    discoveredUrl ||
     (companyName ? guessCompanyUrl(companyName) : "");
 
   // ── Early exit: nothing to work with ──────────────────────────────────────
@@ -96,16 +105,10 @@ export async function companyAgentNode(
     };
   }
 
-  // ── Serper web search (runs even without a URL) ────────────────────────────
-  let serperText = "";
-  if (companyName) {
-    const snippets = await serperCompanySearch(companyName);
-    if (snippets) serperText = snippets;
-  }
-
-  // ── Scrape homepage ────────────────────────────────────────────────────────
+  // ── Scrape homepage (+ About page) ─────────────────────────────────────────
   let homepageText = "";
   let aboutPageText = "";
+  let scrapeFailed = false;
   const warnings: Array<Partial<ResumeJobState>> = [];
 
   if (companyUrl) {
@@ -120,17 +123,36 @@ export async function companyAgentNode(
         if (aboutRaw) aboutPageText = aboutRaw.text;
       }
     } else {
-      warnings.push(
-        appendWarning(
-          state,
-          `[companyAgent] Could not scrape ${companyUrl} — site may block bots or require JS.`,
-        ),
-      );
+      scrapeFailed = true;
     }
   }
 
+  // Only surface a warning when we have NOTHING to synthesize from. A failed
+  // homepage scrape is harmless when web search already returned good material.
+  const haveResearch =
+    searchText.length > 0 || homepageText.length > 0 || aboutPageText.length > 0;
+
+  if (scrapeFailed && !haveResearch) {
+    warnings.push(
+      appendWarning(
+        state,
+        `[companyAgent] Could not reach a website for "${companyName || companyUrl}" and web search returned nothing — research is limited. ` +
+        "Add the company's URL in the form for richer insight.",
+      ),
+    );
+  } else if (scrapeFailed) {
+    console.warn(
+      `[companyAgent] Site scrape failed for ${companyUrl}; proceeding with web-search research (${searchText.length} chars).`,
+    );
+  }
+
+  // The website we can stand behind: a real (user/discovered) URL, or the
+  // guessed one only if it actually scraped. Never store an unverified guess.
+  const resolvedWebsite =
+    state.companyUrl || discoveredUrl || (homepageText ? companyUrl : null);
+
   // ── LLM synthesis ─────────────────────────────────────────────────────────
-  const researchText = buildResearchText(companyName, homepageText, aboutPageText, serperText);
+  const researchText = buildResearchText(companyName, homepageText, aboutPageText, searchText);
 
   let extracted: z.infer<typeof CompanyExtractSchema>;
   try {
@@ -142,7 +164,7 @@ export async function companyAgentNode(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const fallback: CompanyResearch = {
-      name: companyName, website: companyUrl || null,
+      name: companyName, website: resolvedWebsite,
       mission: null, values: [], recentNews: [], techStack: [], cultureNotes: "",
     };
     return {
@@ -155,7 +177,7 @@ export async function companyAgentNode(
 
   const companyResearch: CompanyResearch = {
     name:         extracted.name  || companyName,
-    website:      companyUrl      || null,
+    website:      resolvedWebsite,
     mission:      extracted.mission || null,
     values:       extracted.values,
     recentNews:   extracted.recentNews,

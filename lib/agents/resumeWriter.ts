@@ -5,6 +5,7 @@ import {
   appendWarning,
 } from "../state/resumeState";
 import { generateText, REASONING_MODEL } from "../llm/anthropic";
+import { RESUME_WRITER_SYSTEM_PROMPT as SYSTEM_PROMPT } from "./prompts";
 
 // ─── Placeholder cleanup ──────────────────────────────────────────────────────
 // Strip any [bracket] patterns the model may emit despite instructions.
@@ -16,48 +17,8 @@ function cleanPlaceholders(text: string): string {
     .trim();
 }
 
-// ─── System prompt ────────────────────────────────────────────────────────────
-
-const SYSTEM_PROMPT = `You are an Elite Technical Career Architect specializing in strategic resume alignment.
-
-ROLE DEFINITION:
-Your job is to ALIGN an existing resume with a specific job and company — NOT rewrite it entirely.
-Extract core messages from job descriptions and company research to create compelling alignment.
-
-CORE PRINCIPLES:
-1. PRESERVE: Keep the original resume structure, experiences, and achievements intact.
-2. ALIGN: Update only the sections that demonstrate fit for THIS specific role and company.
-3. EXTRACT: Derive alignment messages from job requirements and company mission/values.
-4. NO PLACEHOLDERS: Never use [specify X] — always extract actual content from provided research.
-
-ALIGNMENT FOCUS AREAS:
-1. PROFESSIONAL SUMMARY (Rewrite completely):
-   - Open with the candidate's core value proposition for THIS role.
-   - Reference specific technologies from the job description.
-   - Connect to the company's mission/goals using actual language from research.
-
-2. KEY EXPERIENCE BULLETS (Selective enhancement — 2-3 bullets only):
-   - Identify the 2–3 most relevant experiences.
-   - Enhance bullets to emphasize alignment using STAR method.
-   - Integrate company-specific keywords naturally.
-
-3. SKILLS SECTION (Minor reorganisation):
-   - Reorder to prioritise skills mentioned in the job description.
-   - Add any missing critical skills the candidate demonstrably has.
-
-ANTI-PATTERNS:
-- Never rewrite the entire resume from scratch.
-- Never use placeholders like [specify years] or [add metric].
-- Never invent experiences or skills the candidate does not have.
-- No tables, no columns, no first-person pronouns (I, me, my).
-
-QUALITY GATES:
-- Professional Summary must reference the company's actual mission/values.
-- Every alignment claim must be backed by the candidate's actual experience.
-- Top 3 job technologies must appear in the Summary.
-- No placeholders — all content derived from provided data.`;
-
 // ─── Prompt builder ───────────────────────────────────────────────────────────
+// SYSTEM_PROMPT lives in ./prompts (RESUME_WRITER_SYSTEM_PROMPT).
 
 function buildUserPrompt(state: ResumeJobState): string {
   const jd = state.jobDetails!;

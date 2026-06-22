@@ -92,9 +92,9 @@ const POLL_INTERVAL_MS = 2000;
 function AgentStatusBadge({ status }: { status: AgentStatus }) {
   const map: Record<AgentStatus, { label: string; style: React.CSSProperties }> = {
     [AgentStatus.Pending]:   { label: "pending",   style: { background: "var(--bg-base)", color: "var(--text-muted)", borderColor: "var(--border-default)" } },
-    [AgentStatus.Running]:   { label: "running…",  style: { background: "var(--accent-primary)", color: "#fff", borderColor: "var(--accent-primary)" } },
-    [AgentStatus.Completed]: { label: "done",      style: { background: "var(--state-success)", color: "#fff", borderColor: "var(--state-success)" } },
-    [AgentStatus.Failed]:    { label: "failed",    style: { background: "var(--state-error)",   color: "#fff", borderColor: "var(--state-error)"   } },
+    [AgentStatus.Running]:   { label: "running…",  style: { background: "var(--accent-primary)", color: "var(--text-on-accent)", borderColor: "var(--accent-primary)" } },
+    [AgentStatus.Completed]: { label: "done",      style: { background: "var(--state-success)", color: "var(--text-on-accent)", borderColor: "var(--state-success)" } },
+    [AgentStatus.Failed]:    { label: "failed",    style: { background: "var(--state-error)",   color: "var(--text-on-accent)", borderColor: "var(--state-error)"   } },
   };
   const { label, style } = map[status];
   return (
@@ -674,7 +674,8 @@ export function OptimizerForm() {
         <Button
           type="submit"
           disabled={poll.isLoading}
-          style={{ background: "var(--accent-primary)", color: "#fff" }}
+          className="shadow-[0_8px_24px_-6px_rgba(104,67,236,0.55)]"
+          style={{ background: "var(--accent-gradient)", color: "var(--text-on-accent)" }}
         >
           {poll.isLoading ? "Optimizing…" : "Optimize Resume"}
         </Button>

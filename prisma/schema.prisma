@@ -20,8 +20,58 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  runs    OptimizationRun[]
-  resumes Resume[]
+  runs         OptimizationRun[]
+  resumes      Resume[]
+  applications JobApplication[]
+}
+
+// ─── JobApplication ───────────────────────────────────────────────────────────
+// One row per tracked job application. The DB is the system of record for
+// application METADATA only — the markdown content (JD, resume, cover letter,
+// review) lives on disk in the job folder (folderPath). This preserves the
+// "no resume/cover-letter PII in PostgreSQL columns" invariant: we store the
+// folder path + per-file content hashes, never the document bodies.
+model JobApplication {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  slug    String  // folder name under the workspace root, e.g. "giveagrab"
+  company String
+  role    String?
+  jobUrl  String?
+
+  location String?
+  salary   String?
+  status   ApplicationStatus @default(DRAFT)
+
+  appliedAt DateTime?
+  deadline  DateTime?
+
+  contactName  String?
+  contactEmail String?
+  notes        String?
+
+  folderPath String // absolute path to the job folder on disk
+  fileHashes Json?  // { "Resume.md": "sha256…", … } for change detection
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs OptimizationRun[]
+
+  @@unique([userId, slug])
+  @@index([userId, status])
+}
+
+enum ApplicationStatus {
+  DRAFT
+  TAILORING
+  APPLIED
+  INTERVIEW
+  OFFER
+  REJECTED
+  ARCHIVED
 }
 
 // ─── Resume ───────────────────────────────────────────────────────────────────
@@ -57,6 +107,11 @@ model OptimizationRun {
   correlationId String    @unique @default(cuid())
   userId        String
   user          User      @relation(fields: [userId], references: [id])
+
+  // Optional link to a tracked application. Set when a run is launched from
+  // the Applications workspace ("re-run agents") rather than the ad-hoc optimizer.
+  jobApplicationId String?
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
 
   jobUrl      String
   companyName String?

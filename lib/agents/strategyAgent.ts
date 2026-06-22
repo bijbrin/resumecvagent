@@ -7,6 +7,7 @@ import {
   appendWarning,
 } from "../state/resumeState";
 import { structuredOutput, REASONING_MODEL } from "../llm/anthropic";
+import { STRATEGY_AGENT_SYSTEM_PROMPT as SYSTEM_PROMPT } from "./prompts";
 
 // ─── LLM extraction schema ────────────────────────────────────────────────────
 
@@ -37,14 +38,6 @@ function computeSkillGaps(
 }
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
-
-const SYSTEM_PROMPT = `You are an expert career strategist and resume optimization consultant.
-Create a specific, actionable tailoring strategy that bridges a candidate's experience to a target role.
-
-CRITICAL RULES:
-- Quote actual mission statements, values, and job requirements — never use placeholders.
-- Every plan step must name the concrete action (e.g. "Add 'Kubernetes' to the Skills section" not "Add missing skills").
-- The plan array is read line-by-line by the resume and cover letter writers — write it as direct instructions to them.`;
 
 function buildUserPrompt(
   state: ResumeJobState,

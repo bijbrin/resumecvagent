@@ -5,6 +5,7 @@ import {
   appendWarning,
 } from "../state/resumeState";
 import { generateText, REASONING_MODEL } from "../llm/anthropic";
+import { buildCoverLetterSystemPrompt as buildSystemPrompt } from "./prompts";
 
 // ─── Placeholder cleanup ──────────────────────────────────────────────────────
 // Replace common bracket patterns with actual values, then strip any leftovers.
@@ -35,57 +36,8 @@ function cleanPlaceholders(text: string, companyName: string, jobTitle: string):
   return text.trim();
 }
 
-// ─── System prompt builder ────────────────────────────────────────────────────
-// Injecting actual company/role values into the system prompt prevents the model
-// from reaching for generic placeholders even under generation pressure.
-
-function buildSystemPrompt(companyName: string, jobTitle: string): string {
-  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  return `You are an expert cover letter writer specialising in authentic alignment.
-
-ROLE DEFINITION:
-Write a compelling cover letter that demonstrates genuine fit between the candidate
-and THIS specific role at THIS specific company.
-
-ABSOLUTE RULE — NO PLACEHOLDERS:
-NEVER use bracket placeholders like [Company Name], [Job Title], [Hiring Manager], [Date], etc.
-Use these exact values instead:
-- Company Name: "${companyName}"
-- Job Title: "${jobTitle}"
-- Date: "${today}"
-- Salutation: "Dear Hiring Manager," or "Dear ${companyName} Team," — never [Hiring Manager's Name]
-
-CORE PRINCIPLES:
-1. EXTRACT: Derive specific alignment themes from job description and company research.
-2. CONNECT: Link the candidate's actual experiences to job requirements.
-3. ALIGN: Show how the candidate's goals match the company's mission.
-4. NO PLACEHOLDERS: Use "${companyName}" and "${jobTitle}" throughout.
-
-STRUCTURE:
-1. OPENING HOOK: Why THIS role at THIS company excites the candidate.
-   - Reference the actual company mission/values from research.
-   - Mention specific aspects of the role that align with their expertise.
-2. BODY PARAGRAPH 1: Connect 2–3 achievements to job requirements (STAR format).
-3. BODY PARAGRAPH 2: Company alignment — actual mission, values, initiatives.
-4. CLOSING: Strong call to action.
-
-FORBIDDEN:
-- NEVER use [Company Name] — use "${companyName}".
-- NEVER use [Job Title] — use "${jobTitle}".
-- NEVER use [Hiring Manager's Name] — use "Hiring Manager".
-- NEVER use [Today's Date] — use "${today}".
-- NEVER use [Company Address] — omit entirely.
-- NEVER use vague alignment claims — be specific with actual content from research.
-
-QUALITY GATES:
-- Opening must name "${jobTitle}" and "${companyName}".
-- Every claim tied to the candidate's actual experience.
-- At least one specific company value or initiative referenced.
-- At least 2–3 required skills from the job description explicitly mentioned.
-- Professional but personable tone; 3–4 paragraphs, 250–400 words.`;
-}
-
 // ─── User prompt builder ──────────────────────────────────────────────────────
+// buildSystemPrompt lives in ./prompts (buildCoverLetterSystemPrompt).
 
 function buildUserPrompt(state: ResumeJobState): string {
   const jd = state.jobDetails!;

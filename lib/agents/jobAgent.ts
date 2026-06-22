@@ -8,6 +8,7 @@ import {
 } from "../state/resumeState";
 import { structuredOutputWithFallback, EXTRACTION_MODEL, type LLMProvider } from "../llm/anthropic";
 import { scrapeJobUrl } from "../scraper/jobScraper";
+import { JOB_AGENT_SYSTEM_PROMPT as SYSTEM_PROMPT } from "./prompts";
 
 // ─── LLM extraction schema ────────────────────────────────────────────────────
 // .catch() on every field so a malformed LLM response never crashes the graph.
@@ -26,10 +27,6 @@ const JobExtractSchema = z.object({
   securityClearance:   z.string().nullable().catch(null),
   citizenshipRequired: z.string().nullable().catch(null),
 });
-
-const SYSTEM_PROMPT = `You are an expert at parsing job descriptions.
-Extract the key information from the job description provided.
-If information is not present, use an empty string, empty array, or null as appropriate.`;
 
 function buildUserPrompt(jobText: string, siteHint: string): string {
   return `Extract the job details from the following job description.

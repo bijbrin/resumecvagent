@@ -35,7 +35,26 @@ const serverSchema = z.object({
   ).optional(), // optional until the user sets it — Prisma CLI will validate at runtime
 
   // ── LLM providers ─────────────────────────────────────────────────────
-  ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
+  // OpenRouter is the PRIMARY provider (OpenAI-compatible gateway). The hub in
+  // lib/llm/anthropic.ts falls back OpenRouter → Kimi → OpenAI → Anthropic, so
+  // all keys are optional individually — at least one must be set (enforced below).
+  OPENROUTER_API_KEY:  z.string().min(1).optional(),
+  // Override the OpenRouter base URL (defaults to https://openrouter.ai/api/v1).
+  OPENROUTER_BASE_URL: z.string().url().optional(),
+  // Override the default models. Defaults: deepseek/deepseek-v4-flash (primary),
+  // deepseek/deepseek-v3.2 (in-provider fallback).
+  OPENROUTER_MODEL:           z.string().min(1).optional(),
+  OPENROUTER_REASONING_MODEL: z.string().min(1).optional(),
+  OPENROUTER_FALLBACK_MODEL:  z.string().min(1).optional(),
+  // Shorter aliases (used if the OPENROUTER_* equivalents above are unset).
+  LLM_MODEL:           z.string().min(1).optional(),
+  LLM_REASONING_MODEL: z.string().min(1).optional(),
+  LLM_FALLBACK_MODEL:  z.string().min(1).optional(),
+  // Optional attribution headers shown in the OpenRouter dashboard.
+  OPENROUTER_SITE_URL: z.string().url().optional(),
+  OPENROUTER_APP_NAME: z.string().min(1).optional(),
+
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   KIMI_API_KEY:   z.string().min(1).optional(),
   // Override the Kimi base URL. Defaults to api.moonshot.ai/v1 (international);
@@ -62,7 +81,15 @@ const serverSchema = z.object({
 
   // ── Observability ─────────────────────────────────────────────────────
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-});
+}).refine(
+  (e) =>
+    !!(e.OPENROUTER_API_KEY || e.ANTHROPIC_API_KEY || e.KIMI_API_KEY || e.OPENAI_API_KEY),
+  {
+    message:
+      "At least one LLM provider key is required (OPENROUTER_API_KEY recommended; or ANTHROPIC_API_KEY / KIMI_API_KEY / OPENAI_API_KEY).",
+    path: ["OPENROUTER_API_KEY"],
+  },
+);
 
 // ─── Validate ────────────────────────────────────────────────────────────────
 

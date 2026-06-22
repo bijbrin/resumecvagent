@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import {
@@ -11,8 +11,13 @@ import {
 import { ResultsView } from "@/components/results-view";
 import { Button } from "@/components/ui/button";
 
+function normalizeUrl(url: string): string {
+  return url.trim().replace(/^https?:\/\/(www\.)?/, "").replace(/\/+$/, "").toLowerCase();
+}
+
 export default function ResultPage() {
   const params = useParams();
+  const router = useRouter();
   const id =
     typeof params.id === "string" ? params.id : (params.id?.[0] ?? "");
 
@@ -20,9 +25,40 @@ export default function ResultPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setEntry(getSearchById(id));
-    setLoaded(true);
-  }, [id]);
+    let cancelled = false;
+    (async () => {
+      const found = getSearchById(id);
+
+      // If this optimizer run corresponds to a tracked application, the
+      // application detail page is the canonical (richer) view — redirect there.
+      if (found?.jobUrl) {
+        try {
+          const res = await fetch("/api/applications");
+          if (res.ok) {
+            const { applications } = (await res.json()) as {
+              applications: Array<{ id: string; jobUrl: string | null }>;
+            };
+            const target = normalizeUrl(found.jobUrl);
+            const match = applications.find(
+              (a) => a.jobUrl && normalizeUrl(a.jobUrl) === target,
+            );
+            if (!cancelled && match) {
+              router.replace(`/applications/${match.id}`);
+              return; // keep the loading placeholder while navigating
+            }
+          }
+        } catch {
+          /* fall through to the localStorage view */
+        }
+      }
+
+      if (!cancelled) {
+        setEntry(found);
+        setLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, router]);
 
   if (!loaded) {
     return <div className="py-24" aria-hidden />;

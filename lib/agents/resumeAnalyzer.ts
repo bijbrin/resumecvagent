@@ -7,6 +7,7 @@ import {
   appendWarning,
 } from "../state/resumeState";
 import { structuredOutput, EXTRACTION_MODEL } from "../llm/anthropic";
+import { RESUME_ANALYZER_SYSTEM_PROMPT as SYSTEM_PROMPT } from "./prompts";
 
 // ─── Weak-verb dictionary ─────────────────────────────────────────────────────
 // Pre-scan catches obvious cases before the LLM sees the resume, so the LLM
@@ -40,10 +41,6 @@ const ResumeAnalysisSchema = z.object({
   strengths:       z.array(z.string()).catch([]),
   gaps:            z.array(z.string()).catch([]),
 });
-
-const SYSTEM_PROMPT = `You are an expert resume reviewer and ATS optimization specialist.
-Analyze the resume provided — be specific and actionable. Focus on what a recruiter and an
-ATS would flag, not generic advice.`;
 
 function buildUserPrompt(resumeText: string, jobDescriptionText: string): string {
   const hasJD = jobDescriptionText.trim().length > 0;

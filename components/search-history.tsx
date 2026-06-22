@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 function fitScoreStyle(score: number): React.CSSProperties {
-  if (score >= 70) return { background: "var(--state-success)", color: "#fff", borderColor: "var(--state-success)" };
-  if (score >= 50) return { background: "var(--state-warning, #d97706)", color: "#fff", borderColor: "var(--state-warning, #d97706)" };
-  return { background: "var(--state-error)", color: "#fff", borderColor: "var(--state-error)" };
+  if (score >= 70) return { background: "var(--state-success)", color: "var(--text-on-accent)", borderColor: "var(--state-success)" };
+  if (score >= 50) return { background: "var(--state-warning)", color: "var(--text-on-accent)", borderColor: "var(--state-warning)" };
+  return { background: "var(--state-error)", color: "var(--text-on-accent)", borderColor: "var(--state-error)" };
 }
 
 function remoteLabel(remote: boolean | null | undefined): string | null {
@@ -166,9 +166,9 @@ export function SearchHistory() {
                     variant="outline"
                     className="text-xs font-medium px-2 gap-1"
                     style={{
-                      borderColor: "color-mix(in srgb, var(--state-warning, #d97706) 60%, transparent)",
-                      color: "var(--state-warning, #d97706)",
-                      background: "color-mix(in srgb, var(--state-warning, #d97706) 8%, transparent)",
+                      borderColor: "color-mix(in srgb, var(--state-warning) 60%, transparent)",
+                      color: "var(--state-warning)",
+                      background: "color-mix(in srgb, var(--state-warning) 8%, transparent)",
                     }}
                   >
                     <Shield className="size-3" />
@@ -182,9 +182,9 @@ export function SearchHistory() {
                     variant="outline"
                     className="text-xs font-medium px-2"
                     style={{
-                      borderColor: "color-mix(in srgb, var(--state-warning, #d97706) 60%, transparent)",
-                      color: "var(--state-warning, #d97706)",
-                      background: "color-mix(in srgb, var(--state-warning, #d97706) 8%, transparent)",
+                      borderColor: "color-mix(in srgb, var(--state-warning) 60%, transparent)",
+                      color: "var(--state-warning)",
+                      background: "color-mix(in srgb, var(--state-warning) 8%, transparent)",
                     }}
                   >
                     {citizenship}

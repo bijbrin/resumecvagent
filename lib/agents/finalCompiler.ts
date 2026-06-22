@@ -5,13 +5,9 @@ import {
   appendWarning,
 } from "../state/resumeState";
 import { generateTextWithFallback, REASONING_MODEL } from "../llm/anthropic";
+import { INTERVIEW_SYSTEM_PROMPT } from "./prompts";
 
 // ─── Interview cheat sheet ────────────────────────────────────────────────────
-
-const INTERVIEW_SYSTEM_PROMPT = `You are an expert interview coach.
-Create a concise, scannable interview prep cheat sheet in Markdown.
-Be specific — every point must name the actual role, company, or skill.
-No generic filler ("bring your best self", "be enthusiastic").`;
 
 function buildInterviewPrompt(state: ResumeJobState): string {
   const jd = state.jobDetails!;

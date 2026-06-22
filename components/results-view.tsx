@@ -4,8 +4,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Check, Copy, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import type { CompanyResearch, JobDetails } from "@/lib/state/resumeState";
+import { CompanyCard } from "@/components/company-card";
+import { WarningsSection } from "@/components/warnings-section";
+import { fitScoreStyle } from "@/lib/applications/status";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -19,15 +22,6 @@ export interface ResultsData {
   warnings:               string[];
   companyResearch:        CompanyResearch | null;
   jobDetails:             JobDetails | null;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fitScoreStyle(score: number | null): React.CSSProperties {
-  if (score === null) return { background: "var(--bg-surface)", color: "var(--text-muted)", borderColor: "var(--border-default)" };
-  if (score >= 70)    return { background: "var(--state-success)", color: "#fff", borderColor: "var(--state-success)" };
-  if (score >= 50)    return { background: "var(--state-warning, #d97706)", color: "#fff", borderColor: "var(--state-warning, #d97706)" };
-  return                     { background: "var(--state-error)", color: "#fff", borderColor: "var(--state-error)" };
 }
 
 // ── CopyButton ────────────────────────────────────────────────────────────────
@@ -96,174 +90,6 @@ function ContentPanel({
   );
 }
 
-// ── Warnings ──────────────────────────────────────────────────────────────────
-
-function WarningsSection({ warnings }: { warnings: string[] }) {
-  const [open, setOpen] = useState(false);
-
-  if (warnings.length === 0) return null;
-
-  return (
-    <div
-      className="rounded-lg border"
-      style={{
-        background:  "color-mix(in srgb, var(--state-warning, #d97706) 8%, transparent)",
-        borderColor: "color-mix(in srgb, var(--state-warning, #d97706) 40%, transparent)",
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium"
-        style={{ color: "var(--state-warning, #d97706)" }}
-      >
-        <span>{warnings.length} warning{warnings.length > 1 ? "s" : ""}</span>
-        {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-      </button>
-      {open && (
-        <ul className="px-4 pb-3 flex flex-col gap-1">
-          {warnings.map((w, i) => (
-            <li key={i} className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              {w}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-// ── CompanyCard ───────────────────────────────────────────────────────────────
-
-function CompanyCard({ research }: { research: CompanyResearch }) {
-  const hasContent =
-    research.mission ||
-    research.values.length > 0 ||
-    research.recentNews.length > 0 ||
-    research.techStack.length > 0 ||
-    research.cultureNotes;
-
-  if (!hasContent && !research.name) return null;
-
-  return (
-    <div
-      className="rounded-lg border p-5 flex flex-col gap-4"
-      style={{
-        background:  "var(--bg-surface)",
-        borderColor: "var(--border-default)",
-      }}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <div
-            className="w-2 h-2 rounded-full shrink-0"
-            style={{ background: "var(--accent-primary)" }}
-          />
-          <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            Company Research
-            {research.name ? ` — ${research.name}` : ""}
-          </h3>
-        </div>
-        {research.website && (
-          <a
-            href={research.website}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-xs"
-            style={{ color: "var(--accent-primary)" }}
-          >
-            {research.website.replace(/^https?:\/\/(www\.)?/, "")}
-            <ExternalLink className="size-3" />
-          </a>
-        )}
-      </div>
-
-      {/* Mission */}
-      {research.mission && (
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Mission
-          </p>
-          <p className="text-sm italic" style={{ color: "var(--text-secondary)" }}>
-            {research.mission}
-          </p>
-        </div>
-      )}
-
-      {/* Values */}
-      {research.values.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Values
-          </p>
-          <ul className="flex flex-col gap-1">
-            {research.values.map((v, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-                <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: "var(--accent-primary)" }} />
-                {v}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Culture notes */}
-      {research.cultureNotes && (
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Culture
-          </p>
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            {research.cultureNotes}
-          </p>
-        </div>
-      )}
-
-      {/* Recent news */}
-      {research.recentNews.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Recent News
-          </p>
-          <ul className="flex flex-col gap-1">
-            {research.recentNews.map((n, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-                <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: "var(--text-faint)" }} />
-                {n}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Tech stack */}
-      {research.techStack.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Tech Stack
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {research.techStack.map((t, i) => (
-              <Badge
-                key={i}
-                variant="outline"
-                className="text-xs font-normal px-2 py-0.5"
-                style={{
-                  borderColor: "var(--border-default)",
-                  color: "var(--text-secondary)",
-                  background: "var(--bg-base)",
-                }}
-              >
-                {t}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── ResultsView ───────────────────────────────────────────────────────────────
 

@@ -3,6 +3,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { kimiGenerateText, KIMI_MODEL } from "./kimi";
 import { openaiGenerateText, OPENAI_EXTRACTION_MODEL, OPENAI_REASONING_MODEL } from "./openai";
+import {
+  openrouterGenerateText,
+  OPENROUTER_EXTRACTION_MODEL,
+  OPENROUTER_REASONING_MODEL,
+} from "./openrouter";
 
 // Singleton Anthropic client — created once, reused across requests.
 let _client: Anthropic | null = null;
@@ -12,15 +17,37 @@ function client(): Anthropic {
 }
 
 // ─── Model constants ──────────────────────────────────────────────────────────
-// Kimi models — used as defaults when calling via the fallback chain.
-export const EXTRACTION_MODEL = KIMI_MODEL;              // moonshot-v1-32k
-export const REASONING_MODEL  = KIMI_MODEL;              // moonshot-v1-32k
+// Default model ids agents pass in. These are OpenRouter ids because OpenRouter
+// is the PRIMARY provider; on fallback the hub remaps them to the equivalent tier
+// for Kimi / OpenAI / Anthropic (see resolveModel below).
+export const EXTRACTION_MODEL = OPENROUTER_EXTRACTION_MODEL;
+export const REASONING_MODEL  = OPENROUTER_REASONING_MODEL;
 
-// Anthropic fallback models (used when Kimi is unavailable).
+// Anthropic fallback models (used when OpenRouter & Kimi are unavailable).
 export const ANTHROPIC_EXTRACTION_MODEL = "claude-haiku-4-5-20251001";
 export const ANTHROPIC_REASONING_MODEL  = "claude-sonnet-4-6";
 
-export type LLMProvider = "kimi" | "anthropic" | "openai";
+export type LLMProvider = "openrouter" | "kimi" | "anthropic" | "openai";
+
+// ─── Tier resolution ────────────────────────────────────────────────────────
+// Agents request a model by its OpenRouter id (EXTRACTION_MODEL / REASONING_MODEL).
+// When falling back to another provider we can't pass that id through, so map the
+// requested tier to that provider's equivalent model.
+type Tier = "extraction" | "reasoning";
+
+function tierOf(model?: string): Tier {
+  return model === REASONING_MODEL ? "reasoning" : "extraction";
+}
+
+function resolveModel(requested: string | undefined, provider: LLMProvider): string {
+  const tier = tierOf(requested);
+  switch (provider) {
+    case "openrouter": return requested ?? EXTRACTION_MODEL;
+    case "kimi":       return KIMI_MODEL; // single Kimi model handles both tiers
+    case "openai":     return tier === "reasoning" ? OPENAI_REASONING_MODEL : OPENAI_EXTRACTION_MODEL;
+    case "anthropic":  return tier === "reasoning" ? ANTHROPIC_REASONING_MODEL : ANTHROPIC_EXTRACTION_MODEL;
+  }
+}
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -62,8 +89,8 @@ async function anthropicGenerateText(
 }
 
 // ─── generateText ─────────────────────────────────────────────────────────────
-// Public entry point for a single LLM call. Tries Kimi first.
-// Falls back to Anthropic, then OpenAI. Throws if all three fail.
+// Public entry point for a single LLM call. Tries OpenRouter first.
+// Falls back to Kimi → OpenAI → Anthropic. Throws if all fail.
 
 export async function generateText(
   messages: ChatMessage[],
@@ -73,8 +100,27 @@ export async function generateText(
   return text;
 }
 
+// ─── chatComplete ─────────────────────────────────────────────────────────────
+// Multi-turn chat helper for the application AI assistant. Thin wrapper over the
+// shared provider fallback chain (OpenRouter → Kimi → OpenAI → Anthropic) using
+// the reasoning tier. `system` carries the grounding context (JD, resume, etc.).
+
+export async function chatComplete(
+  messages: ChatMessage[],
+  system:   string,
+  options:  Omit<LLMOptions, "systemPrompt"> = {},
+): Promise<string> {
+  return generateText(messages, {
+    model:       REASONING_MODEL,
+    temperature: 0.5,
+    maxTokens:   1500,
+    ...options,
+    systemPrompt: system,
+  });
+}
+
 // ─── generateTextWithFallback ─────────────────────────────────────────────────
-// Priority: Kimi → Anthropic → OpenAI.
+// Priority: OpenRouter → Kimi → OpenAI → Anthropic.
 // Returns { text, provider } so callers can warn when a fallback was used.
 
 export async function generateTextWithFallback(
@@ -82,11 +128,30 @@ export async function generateTextWithFallback(
   options:  LLMOptions = {},
 ): Promise<{ text: string; provider: LLMProvider }> {
   const errors: string[] = [];
+  const withModel = (provider: LLMProvider) => ({
+    ...options,
+    model: resolveModel(options.model, provider),
+  });
 
-  // 1. Kimi (Moonshot) ─────────────────────────────────────────────────────────
+  // 1. OpenRouter (primary) ──────────────────────────────────────────────────────
+  if (process.env.OPENROUTER_API_KEY) {
+    try {
+      const text = await openrouterGenerateText(messages, withModel("openrouter"));
+      return { text, provider: "openrouter" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[llm] OpenRouter failed: ${msg}`);
+      errors.push(`OpenRouter: ${msg}`);
+    }
+  } else {
+    errors.push("OpenRouter: OPENROUTER_API_KEY not set");
+  }
+
+  // 2. Kimi (Moonshot) ───────────────────────────────────────────────────────────
   if (process.env.KIMI_API_KEY) {
     try {
-      const text = await kimiGenerateText(messages, options);
+      const text = await kimiGenerateText(messages, withModel("kimi"));
+      console.log(`[llm] Using Kimi fallback (OpenRouter unavailable).`);
       return { text, provider: "kimi" };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -97,15 +162,11 @@ export async function generateTextWithFallback(
     errors.push("Kimi: KIMI_API_KEY not set");
   }
 
-  // 2. OpenAI ───────────────────────────────────────────────────────────────────
+  // 3. OpenAI ─────────────────────────────────────────────────────────────────────
   if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== "sk-...") {
     try {
-      const openaiOptions = {
-        ...options,
-        model: options.model === KIMI_MODEL ? OPENAI_EXTRACTION_MODEL : options.model,
-      };
-      const text = await openaiGenerateText(messages, openaiOptions);
-      console.log(`[llm] Using OpenAI fallback (Kimi unavailable).`);
+      const text = await openaiGenerateText(messages, withModel("openai"));
+      console.log(`[llm] Using OpenAI fallback.`);
       return { text, provider: "openai" };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -116,14 +177,10 @@ export async function generateTextWithFallback(
     errors.push("OpenAI: OPENAI_API_KEY not set");
   }
 
-  // 3. Anthropic (last resort) ──────────────────────────────────────────────────
+  // 4. Anthropic (last resort) ────────────────────────────────────────────────────
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      const anthropicOptions = {
-        ...options,
-        model: options.model === KIMI_MODEL ? ANTHROPIC_EXTRACTION_MODEL : options.model,
-      };
-      const text = await anthropicGenerateText(messages, anthropicOptions);
+      const text = await anthropicGenerateText(messages, withModel("anthropic"));
       console.log(`[llm] Using Anthropic last-resort fallback.`);
       return { text, provider: "anthropic" };
     } catch (err) {

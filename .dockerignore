@@ -1,0 +1,15 @@
+# Keep the build context small; these are rebuilt/injected at build or runtime.
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.*
+lib/generated
+*.log
+npm-debug.log*
+.DS_Store
+.vscode
+.idea
+README.md
+context

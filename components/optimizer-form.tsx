@@ -2,20 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback, type FormEvent, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { Upload, FileText, Loader2, X, Sparkles, AlertCircle, Wand2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FileText, Loader2, X, UploadCloud } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { AgentStatus, type AgentName, type AgentStatusMap, type CompanyResearch, type JobDetails } from "@/lib/state/resumeState";
+import { type AgentStatusMap, type CompanyResearch, type JobDetails } from "@/lib/state/resumeState";
 import { ResultsView, type ResultsData } from "@/components/results-view";
+import { AgentPipeline } from "@/components/agent-pipeline";
 import { saveSearch } from "@/lib/search-history";
 
 // ── Saved-resume types ────────────────────────────────────────────────────────
@@ -73,70 +64,19 @@ interface ResultResponse {
   error?: string;
 }
 
-// The 8 agents in execution order — shown in the loading panel.
-const AGENT_SEQUENCE: Array<{ name: AgentName; label: string }> = [
-  { name: "inputParser",       label: "Parse inputs"       },
-  { name: "jobAgent",          label: "Scrape job posting" },
-  { name: "companyAgent",      label: "Research company"   },
-  { name: "resumeAnalyzer",    label: "Analyse resume"     },
-  { name: "strategyAgent",     label: "Build strategy"     },
-  { name: "resumeWriter",      label: "Rewrite resume"     },
-  { name: "coverLetterWriter", label: "Write cover letter" },
-  { name: "finalCompiler",     label: "Compile report"     },
+// The 8 agents in execution order — shown in the entry-screen pipeline preview.
+const PIPELINE_PREVIEW: Array<{ code: string; label: string; stageTag: string }> = [
+  { code: "IP", label: "Input Parser",        stageTag: "Stage 1" },
+  { code: "JB", label: "Job Agent",           stageTag: "Stage 2" },
+  { code: "CR", label: "Company Research",    stageTag: "Stage 2" },
+  { code: "RA", label: "Resume Analyzer",     stageTag: "Stage 2" },
+  { code: "ST", label: "Strategy Agent",      stageTag: "Stage 3" },
+  { code: "RW", label: "Resume Writer",       stageTag: "Stage 4" },
+  { code: "CW", label: "Cover Letter Writer", stageTag: "Stage 4" },
+  { code: "FC", label: "Final Compiler",      stageTag: "Stage 5" },
 ];
 
 const POLL_INTERVAL_MS = 2000;
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function AgentStatusBadge({ status }: { status: AgentStatus }) {
-  const map: Record<AgentStatus, { label: string; style: React.CSSProperties }> = {
-    [AgentStatus.Pending]:   { label: "pending",   style: { background: "var(--bg-base)", color: "var(--text-muted)", borderColor: "var(--border-default)" } },
-    [AgentStatus.Running]:   { label: "running…",  style: { background: "var(--accent-primary)", color: "var(--text-on-accent)", borderColor: "var(--accent-primary)" } },
-    [AgentStatus.Completed]: { label: "done",      style: { background: "var(--state-success)", color: "var(--text-on-accent)", borderColor: "var(--state-success)" } },
-    [AgentStatus.Failed]:    { label: "failed",    style: { background: "var(--state-error)",   color: "var(--text-on-accent)", borderColor: "var(--state-error)"   } },
-  };
-  const { label, style } = map[status];
-  return (
-    <Badge
-      variant="outline"
-      className="text-[10px] font-mono px-1.5 py-0"
-      style={style}
-    >
-      {label}
-    </Badge>
-  );
-}
-
-function LoadingPanel({ agentStatus }: { agentStatus: AgentStatusMap | null }) {
-  return (
-    <Card style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base" style={{ color: "var(--text-primary)" }}>
-          Optimizing…
-        </CardTitle>
-        <CardDescription style={{ color: "var(--text-muted)" }}>
-          The agent graph is running. This may take 30–60 seconds.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ol className="flex flex-col gap-2">
-          {AGENT_SEQUENCE.map(({ name, label }) => {
-            const status = agentStatus?.[name]?.status ?? AgentStatus.Pending;
-            return (
-              <li key={name} className="flex items-center justify-between gap-4">
-                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  {label}
-                </span>
-                <AgentStatusBadge status={status} />
-              </li>
-            );
-          })}
-        </ol>
-      </CardContent>
-    </Card>
-  );
-}
 
 // ── Hook: poll optimization status ────────────────────────────────────────────
 
@@ -148,6 +88,7 @@ function useOptimizationPoll() {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [results, setResults] = useState<ResultsData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<number>(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -173,6 +114,7 @@ function useOptimizationPoll() {
     setStatus(null);
     setResults(null);
     setErrorMessage(null);
+    setStartedAt(Date.now());
 
     try {
       // 1. Submit the optimization request
@@ -268,23 +210,26 @@ function useOptimizationPoll() {
 
   const isLoading = phase === "submitting" || phase === "polling";
 
-  return { phase, isLoading, correlationId, status, results, errorMessage, start, reset };
+  return { phase, isLoading, correlationId, status, results, errorMessage, startedAt, start, reset };
 }
 
 // ── Main form ─────────────────────────────────────────────────────────────────
 
 export function OptimizerForm() {
   const searchParams = useSearchParams();
-  const [fields, setFields] = useState<FormFields>({
+  // Pre-fill from URL query params (coming from the job scanner) at init — no
+  // effect needed, so there's no setState-in-effect cascade.
+  const [fields, setFields] = useState<FormFields>(() => ({
     resumeText: "",
-    jobUrl: "",
-    jobDescriptionText: "",
-  });
+    jobUrl: searchParams.get("jobUrl") ?? "",
+    jobDescriptionText: searchParams.get("jobDesc") ?? "",
+  }));
   const [resumes, setResumes] = useState<ResumeMeta[]>([]);
   const [activeResume, setActiveResume] = useState<ResumeMeta | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [prefilledFromUrl, setPrefilledFromUrl] = useState(false);
+  const prefilledFromUrl = Boolean(searchParams.get("jobUrl"));
+  const [showResults, setShowResults] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const poll = useOptimizationPoll();
 
@@ -324,22 +269,6 @@ export function OptimizerForm() {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Pre-fill from URL query params (coming from job-scraper)
-  useEffect(() => {
-    const jobUrl = searchParams.get("jobUrl");
-    const jobDesc = searchParams.get("jobDesc");
-    const jobTitle = searchParams.get("jobTitle");
-
-    if (jobUrl) {
-      setFields((prev) => ({
-        ...prev,
-        jobUrl,
-        jobDescriptionText: jobDesc || prev.jobDescriptionText,
-      }));
-      setPrefilledFromUrl(true);
-    }
-  }, [searchParams]);
 
   function setField(key: keyof FormFields, value: string) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -413,97 +342,119 @@ export function OptimizerForm() {
     await poll.start(fields);
   }
 
-  if (poll.phase === "done" && poll.results) {
+  const agentStatus: AgentStatusMap | null = poll.status?.agentStatus ?? null;
+  const runActive = poll.phase === "submitting" || poll.phase === "polling" || poll.phase === "done";
+
+  // Final, full results view — reached from the "View results →" button.
+  if (showResults && poll.results) {
     return (
       <ResultsView
         data={poll.results}
         onReset={() => {
+          setShowResults(false);
           poll.reset();
         }}
       />
     );
   }
 
+  // Live multi-agent pipeline — bound to the real streamed agent status.
+  if (runActive) {
+    return (
+      <AgentPipeline
+        agentStatus={agentStatus}
+        startedAt={poll.startedAt}
+        complete={poll.phase === "done"}
+        fitScore={poll.results?.fitScore ?? null}
+        warnings={poll.status?.warnings ?? []}
+        onReplay={() => poll.start(fields)}
+        onViewResults={poll.phase === "done" && poll.results ? () => setShowResults(true) : undefined}
+      />
+    );
+  }
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: "var(--font-geist-mono), monospace",
+    fontSize: "10.5px",
+    letterSpacing: "0.1em",
+    color: "var(--text-secondary)",
+  };
+
+  // ── Entry screen (idle / error) ─────────────────────────────────────────────
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6 w-full max-w-2xl">
+    <form onSubmit={handleSubmit} className="mx-auto w-full max-w-[1080px]">
+      {/* Header block */}
+      <div className="mb-7">
+        <span className="font-mono text-[11px]" style={{ letterSpacing: "0.16em", color: "var(--accent)" }}>
+          NEW&nbsp;OPTIMIZATION
+        </span>
+        <h1 className="mt-3 mb-2 text-[30px] font-semibold tracking-[-0.022em]" style={{ color: "var(--text-primary)" }}>
+          Tailor your application in one pass
+        </h1>
+        <p className="m-0 max-w-[560px] text-[15px] leading-[1.55]" style={{ color: "var(--text-secondary)" }}>
+          Paste the job posting and drop your resume. Eight agents research the company, analyze fit,
+          and write ATS-ready materials — start to finish in about thirty seconds.
+        </p>
+      </div>
+
       {/* Pre-filled banner */}
       {prefilledFromUrl && (
         <div
-          className="rounded-xl border px-4 py-3 flex items-center gap-3"
-          style={{
-            background: "color-mix(in srgb, var(--accent-primary) 8%, transparent)",
-            borderColor: "color-mix(in srgb, var(--accent-primary) 30%, transparent)",
-          }}
+          className="mb-5 flex items-center gap-3 rounded-[14px] px-4 py-3"
+          style={{ background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}
         >
-          <Sparkles className="size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              Job details loaded from scanner
-            </p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Job details loaded from scanner</p>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               {searchParams.get("jobTitle")} · {searchParams.get("jobCompany")}
             </p>
           </div>
-          {fields.resumeText.length >= 50 ? (
-            <Button
-              type="submit"
-              disabled={poll.isLoading}
-              size="sm"
-              className="gap-1.5 shrink-0"
-              style={{ background: "var(--accent-primary)", color: "#fff" }}
-            >
-              {poll.isLoading ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Working…
-                </>
-              ) : (
-                <>
-                  <Wand2 className="size-3.5" />
-                  Auto-Optimize
-                </>
-              )}
-            </Button>
-          ) : (
-            <span className="text-xs font-medium shrink-0" style={{ color: "var(--state-warn)" }}>
-              Add resume first →
-            </span>
+          {fields.resumeText.length < 50 && (
+            <span className="shrink-0 text-xs font-medium" style={{ color: "var(--state-warn)" }}>Add resume first →</span>
           )}
         </div>
       )}
 
-      {/* No resume warning */}
-      {prefilledFromUrl && fields.resumeText.length < 50 && resumes.length === 0 && (
+      {/* Error message */}
+      {poll.phase === "error" && poll.errorMessage && (
         <div
-          className="rounded-xl border px-4 py-3 flex items-start gap-3"
-          style={{
-            background: "color-mix(in srgb, var(--state-warn) 8%, transparent)",
-            borderColor: "color-mix(in srgb, var(--state-warn) 30%, transparent)",
-          }}
+          className="mb-5 rounded-[14px] px-4 py-3 text-sm"
+          style={{ background: "color-mix(in srgb, var(--state-error) 10%, transparent)", border: "1px solid var(--state-error)", color: "var(--state-error)" }}
         >
-          <AlertCircle className="size-5 shrink-0 mt-0.5" style={{ color: "var(--state-warn)" }} />
-          <div>
-            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              No resume found
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Upload a PDF/DOCX or paste your resume below before optimizing.
-            </p>
-          </div>
+          {poll.errorMessage}
         </div>
       )}
 
-      {/* Resume section */}
-      <Card style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
-        <CardHeader>
-          <CardTitle style={{ color: "var(--text-primary)" }}>Your Resume</CardTitle>
-          <CardDescription style={{ color: "var(--text-muted)" }}>
-            Upload a PDF or DOCX, pick a saved resume, or paste plain text/Markdown below.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {/* Upload + saved-resume picker */}
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="grid items-start gap-5 lg:grid-cols-[1.55fr_1fr]">
+        {/* Left — form card */}
+        <div
+          className="flex flex-col gap-[22px] rounded-[18px] p-6"
+          style={{ background: "color-mix(in srgb, var(--surface) 60%, transparent)", border: "1px solid var(--border-default)" }}
+        >
+          {/* Job posting URL */}
+          <div className="flex flex-col gap-[9px]">
+            <label htmlFor="job-url" style={labelStyle}>JOB&nbsp;POSTING&nbsp;URL</label>
+            <div
+              className="flex items-center gap-[11px] rounded-[11px] px-3.5 py-[11px] focus-within:border-[var(--accent-line)]"
+              style={{ border: "1px solid var(--border-strong)", background: "var(--bg-elev)" }}
+            >
+              <span className="flex-none font-mono text-[10px] rounded-[6px] px-[7px] py-[3px]" style={{ color: "var(--accent)", background: "var(--accent-soft)" }}>URL</span>
+              <input
+                id="job-url"
+                required
+                type="url"
+                placeholder="https://stripe.com/jobs/listing/senior-product-designer"
+                value={fields.jobUrl}
+                onChange={(e) => setField("jobUrl", e.target.value)}
+                className="min-w-0 flex-1 bg-transparent font-mono text-[14px] outline-none"
+                style={{ color: "var(--text-primary)" }}
+              />
+            </div>
+          </div>
+
+          {/* Resume */}
+          <div className="flex flex-col gap-[9px]">
+            <label style={labelStyle}>YOUR&nbsp;RESUME</label>
             <input
               ref={fileInputRef}
               type="file"
@@ -511,28 +462,51 @@ export function OptimizerForm() {
               className="hidden"
               onChange={handleFileChange}
             />
-            <Button
+            <button
               type="button"
-              variant="outline"
-              size="sm"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
-              className="gap-1.5"
+              className="flex cursor-pointer flex-col items-center gap-[11px] rounded-[13px] p-[22px] text-center transition-colors hover:border-[var(--accent-line)]"
+              style={{ border: "1.5px dashed rgba(255,255,255,.16)", background: "rgba(255,255,255,.015)" }}
             >
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploading ? "Extracting…" : "Upload PDF / DOCX"}
-            </Button>
+              {uploading ? (
+                <Loader2 className="h-[22px] w-[22px] animate-spin" style={{ color: "var(--accent)" }} />
+              ) : (
+                <UploadCloud className="h-[22px] w-[22px]" style={{ color: "var(--accent)" }} strokeWidth={1.6} />
+              )}
+              <div className="text-[13.5px]" style={{ color: "var(--text-secondary)" }}>
+                {uploading ? "Extracting…" : <>Drop a file or <span style={{ color: "var(--accent)" }}>browse</span></>}
+              </div>
+              <div className="font-mono text-[10.5px]" style={{ color: "var(--text-muted)" }}>PDF · DOCX · MARKDOWN · up to 5MB</div>
+            </button>
 
+            {/* Attached file / active source chip */}
+            {activeResume && (
+              <div
+                className="flex items-center gap-[11px] rounded-[10px] px-3 py-2.5"
+                style={{ border: "1px solid var(--border-default)", background: "var(--bg-elev)" }}
+              >
+                <span className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px] font-mono text-[9px]" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                  {activeResume.source}
+                </span>
+                <div className="flex min-w-0 flex-col leading-[1.3]">
+                  <span className="truncate text-[13px]" style={{ color: "var(--text-primary)" }}>{activeResume.name}</span>
+                  <span className="font-mono text-[10px]" style={{ color: "var(--text-muted)" }}>ready</span>
+                </div>
+                <FileText className="ml-auto hidden h-3.5 w-3.5 sm:block" style={{ color: "var(--text-muted)" }} />
+                <button type="button" onClick={clearActiveResume} aria-label="Clear source" style={{ color: "var(--text-muted)" }}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Saved-resume picker */}
             {resumes.length > 0 && (
               <select
                 value={activeResume?.id ?? ""}
                 onChange={(e) => pickResume(e.target.value)}
-                className="h-9 rounded-md border px-2 text-sm"
-                style={{
-                  background:  "var(--bg-base)",
-                  color:       "var(--text-primary)",
-                  borderColor: "var(--border-default)",
-                }}
+                className="h-9 rounded-[10px] px-2 text-[13px]"
+                style={{ background: "var(--bg-elev)", color: "var(--text-secondary)", border: "1px solid var(--border-default)" }}
               >
                 <option value="">Use a saved resume…</option>
                 {resumes.map((r) => (
@@ -543,142 +517,73 @@ export function OptimizerForm() {
               </select>
             )}
 
-            <span className="ml-auto text-xs" style={{ color: "var(--text-muted)" }}>
-              Max 5 MB
-            </span>
-          </div>
+            {uploadError && (
+              <div className="rounded-[10px] px-3 py-2 text-xs" style={{ background: "color-mix(in srgb, var(--state-error) 10%, transparent)", border: "1px solid var(--state-error)", color: "var(--state-error)" }}>
+                {uploadError}
+              </div>
+            )}
 
-          {/* Active source badge */}
-          {activeResume && (
-            <div
-              className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs"
-              style={{
-                background:  "color-mix(in srgb, var(--accent-primary) 8%, transparent)",
-                borderColor: "var(--border-default)",
-                color:       "var(--text-secondary)",
-              }}
-            >
-              <FileText className="h-3.5 w-3.5" style={{ color: "var(--accent-primary)" }} />
-              <span>
-                From{" "}
-                <span style={{ color: "var(--text-primary)" }} className="font-medium">
-                  {activeResume.name}
-                </span>{" "}
-                · {activeResume.source.toLowerCase()}
-              </span>
-              <button
-                type="button"
-                onClick={clearActiveResume}
-                className="ml-auto inline-flex items-center"
-                style={{ color: "var(--text-muted)" }}
-                aria-label="Clear source"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* Upload error */}
-          {uploadError && (
-            <div
-              className="rounded-md border px-3 py-2 text-xs"
-              style={{
-                background:  "color-mix(in srgb, var(--state-error) 10%, transparent)",
-                borderColor: "var(--state-error)",
-                color:       "var(--state-error)",
-              }}
-            >
-              {uploadError}
-            </div>
-          )}
-
-          <Textarea
-            required
-            minLength={50}
-            placeholder="John Smith&#10;john@example.com | github.com/jsmith&#10;&#10;## Experience&#10;Senior Engineer at Acme Corp (2021–present)…"
-            value={fields.resumeText}
-            onChange={(e) => setResumeText(e.target.value)}
-            className="min-h-52 font-mono text-sm resize-y"
-          />
-        </CardContent>
-      </Card>
-
-      {/* Job Details section */}
-      <Card style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)" }}>
-        <CardHeader>
-          <CardTitle style={{ color: "var(--text-primary)" }}>Job Details</CardTitle>
-          <CardDescription style={{ color: "var(--text-muted)" }}>
-            Link to the job posting. Paste the description if the listing is behind a login.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="job-url"
-              className="text-sm font-medium"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Job URL{" "}
-              <span style={{ color: "var(--accent-primary)" }}>*</span>
-            </label>
-            <Input
-              id="job-url"
+            {/* Paste fallback — keeps text/Markdown entry available */}
+            <Textarea
               required
-              type="url"
-              placeholder="https://linkedin.com/jobs/view/1234567890"
-              value={fields.jobUrl}
-              onChange={(e) => setField("jobUrl", e.target.value)}
+              minLength={50}
+              placeholder="…or paste your resume as plain text / Markdown"
+              value={fields.resumeText}
+              onChange={(e) => setResumeText(e.target.value)}
+              className="min-h-32 resize-y font-mono text-sm"
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="job-desc"
-              className="text-sm font-medium"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Job Description{" "}
-              <span className="font-normal text-xs">(optional)</span>
+          {/* Optional — job description */}
+          <div className="flex flex-col gap-2">
+            <label htmlFor="job-desc" style={{ ...labelStyle, fontSize: "10px", letterSpacing: "0.08em", color: "var(--text-muted)" }}>
+              JOB&nbsp;DESCRIPTION&nbsp;· OPT
             </label>
             <Textarea
               id="job-desc"
-              placeholder="Paste the full job description here if the URL is behind a login…"
+              placeholder="Paste the full description if the URL is behind a login…"
               value={fields.jobDescriptionText}
               onChange={(e) => setField("jobDescriptionText", e.target.value)}
-              className="min-h-32 text-sm resize-y"
+              className="min-h-24 resize-y text-sm"
             />
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Loading panel — visible while the graph runs */}
-      {poll.isLoading && (
-        <LoadingPanel agentStatus={poll.status?.agentStatus ?? null} />
-      )}
-
-      {/* Error message */}
-      {poll.phase === "error" && poll.errorMessage && (
-        <div
-          className="rounded-lg border px-4 py-3 text-sm"
-          style={{
-            background: "color-mix(in srgb, var(--state-error) 10%, transparent)",
-            borderColor: "var(--state-error)",
-            color: "var(--state-error)",
-          }}
-        >
-          {poll.errorMessage}
+          {/* Optimize */}
+          <button
+            type="submit"
+            disabled={poll.isLoading}
+            className="mt-0.5 flex w-full items-center justify-center gap-[11px] rounded-[12px] py-[15px] text-[15px] font-semibold transition-transform duration-150 hover:-translate-y-px disabled:opacity-60"
+            style={{ background: "var(--accent)", color: "var(--on-accent)", boxShadow: "var(--shadow-btn)" }}
+          >
+            Optimize application
+            <span className="font-mono text-[11px] opacity-70">· 8 AGENTS · ~30S</span>
+          </button>
         </div>
-      )}
 
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          disabled={poll.isLoading}
-          className="shadow-[0_8px_24px_-6px_rgba(104,67,236,0.55)]"
-          style={{ background: "var(--accent-gradient)", color: "var(--text-on-accent)" }}
+        {/* Right — pipeline preview */}
+        <div
+          className="flex flex-col gap-4 rounded-[18px] p-[22px]"
+          style={{ background: "color-mix(in srgb, var(--surface) 60%, transparent)", border: "1px solid var(--border-default)" }}
         >
-          {poll.isLoading ? "Optimizing…" : "Optimize Resume"}
-        </Button>
+          <span className="font-mono text-[10.5px]" style={{ letterSpacing: "0.14em", color: "var(--text-muted)" }}>PIPELINE</span>
+          <div className="flex flex-col gap-[11px]">
+            {PIPELINE_PREVIEW.map((a) => (
+              <div key={a.code} className="flex items-center gap-[11px]">
+                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px] font-mono text-[11px] font-semibold" style={{ background: "rgba(255,255,255,.04)", color: "var(--text-secondary)" }}>
+                  {a.code}
+                </span>
+                <span className="text-[13.5px]" style={{ color: "var(--text-secondary)" }}>{a.label}</span>
+                <span className="ml-auto font-mono text-[9.5px]" style={{ letterSpacing: "0.06em", color: "var(--text-faint)" }}>{a.stageTag}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-start gap-[11px] pt-[15px]" style={{ borderTop: "1px solid var(--border-default)" }}>
+            <span className="text-[14px] leading-[1.3]" style={{ color: "var(--accent)" }}>◆</span>
+            <p className="m-0 text-[12.5px] leading-[1.5]" style={{ color: "var(--text-secondary)" }}>
+              Every output is scored against the live job description for ATS keyword coverage and role fit before you download.
+            </p>
+          </div>
+        </div>
       </div>
     </form>
   );

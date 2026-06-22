@@ -48,4 +48,5 @@ next-env.d.ts
 /ResemeClaudeDesign/*
 AGENTS.md
 CLAUDE.md
+/design_handoff_resumecvagent/*
 

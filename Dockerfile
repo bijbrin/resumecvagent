@@ -21,5 +21,5 @@ RUN DATABASE_URL=postgresql://b:b@localhost:5432/b OPENROUTER_API_KEY=build \
 
 ENV NODE_ENV=production
 VOLUME ["/data/workspace"]
-EXPOSE 3000
+EXPOSE 3005
 CMD ["npm", "run", "start"]

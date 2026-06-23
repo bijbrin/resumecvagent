@@ -10,6 +10,7 @@ const ACCENTS = [
   { key: "violet", color: "#7B61FF" },
   { key: "teal", color: "#27D3BE" },
   { key: "amber", color: "#F5A524" },
+  { key: "retro", color: "#576A8F" },
 ] as const;
 
 type AccentKey = (typeof ACCENTS)[number]["key"];
@@ -35,11 +36,10 @@ function getServerSnapshot(): AccentKey {
 }
 
 function applyAccent(key: AccentKey) {
-  if (key === "crimson") delete document.documentElement.dataset.accent;
-  else document.documentElement.dataset.accent = key;
+  document.documentElement.dataset.accent = key;
 }
 
-export function AccentSwitcher() {
+export function AccentSwitcher({ className = "hidden sm:flex" }: { className?: string }) {
   const active = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   // Mirror the stored accent onto <html> (external-system sync).
@@ -54,7 +54,7 @@ export function AccentSwitcher() {
   }
 
   return (
-    <div className="hidden sm:flex items-center gap-2.5">
+    <div className={`${className} items-center gap-2.5`}>
       <span className="font-mono text-[10px] tracking-[0.1em]" style={{ color: "var(--text-muted)" }}>
         ACCENT
       </span>

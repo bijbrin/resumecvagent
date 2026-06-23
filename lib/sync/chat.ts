@@ -80,9 +80,7 @@ function serialize(messages: ChatMessage[]): string {
   return messages.map((m) => `${HEADER[m.role]}\n\n${m.content.trim()}\n`).join("\n");
 }
 
-/** Append turns to Chat.md, creating the file (with a title) when needed. */
-export function appendChat(folderPath: string, messages: ChatMessage[]): void {
-  if (messages.length === 0) return;
+function doAppendChat(folderPath: string, messages: ChatMessage[]): void {
   const file = chatPath(folderPath);
   const block = serialize(messages);
   if (existsSync(file)) {
@@ -90,4 +88,17 @@ export function appendChat(folderPath: string, messages: ChatMessage[]): void {
   } else {
     writeFileSync(file, `# AI Chat\n\n${block}`, "utf8");
   }
+}
+
+// Serializes writes per folder so two concurrent requests for the same
+// application can't interleave their existsSync/append calls and corrupt
+// Chat.md. Keyed by folderPath; each call chains onto the previous write.
+const writeQueue = new Map<string, Promise<void>>();
+
+/** Append turns to Chat.md, creating the file (with a title) when needed. */
+export function appendChat(folderPath: string, messages: ChatMessage[]): void {
+  if (messages.length === 0) return;
+  const prev = writeQueue.get(folderPath) ?? Promise.resolve();
+  const next = prev.then(() => doAppendChat(folderPath, messages));
+  writeQueue.set(folderPath, next.catch(() => {}));
 }

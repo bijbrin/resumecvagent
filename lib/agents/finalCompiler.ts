@@ -340,8 +340,8 @@ export async function finalCompilerNode(
         { model: REASONING_MODEL, systemPrompt: INTERVIEW_SYSTEM_PROMPT, temperature: 0.3, maxTokens: 1800 },
       );
       interviewCheatsheet = text;
-      if (provider !== "kimi") {
-        warnings.push(`[finalCompiler] Kimi unavailable — interview prep generated via ${provider} fallback.`);
+      if (provider !== "openrouter") {
+        warnings.push(`[finalCompiler] OpenRouter unavailable — interview prep generated via ${provider} fallback.`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

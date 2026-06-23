@@ -1,3 +1,5 @@
+// Named `proxy.ts`, not `middleware.ts` — intentional, confirmed with the
+// project owner. Do not rename to `middleware.ts` without checking first.
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 // Routes that are publicly accessible without signing in
@@ -5,8 +7,6 @@ const isPublicRoute = createRouteMatcher([
   "/",                    // landing / marketing page
   "/sign-in(.*)",
   "/sign-up(.*)",
-  "/api/v1/health",       // health check — no auth needed
-  "/api/v1/supported-job-sites",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

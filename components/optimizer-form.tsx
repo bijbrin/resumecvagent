@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, type FormEvent, type ChangeEvent } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FileText, Loader2, X, UploadCloud } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { type AgentStatusMap, type CompanyResearch, type JobDetails } from "@/lib/state/resumeState";
-import { ResultsView, type ResultsData } from "@/components/results-view";
 import { AgentPipeline } from "@/components/agent-pipeline";
-import { saveSearch } from "@/lib/search-history";
 
 // ── Saved-resume types ────────────────────────────────────────────────────────
 
@@ -25,6 +23,14 @@ interface ResumeRecord extends ResumeMeta {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+/** Minimal result shape captured from the optimize result endpoint. Only
+ *  `fitScore` is consumed by the AgentPipeline; the full resume / cover-letter
+ *  / report / interview bodies live in the promoted JobApplication's folder and
+ *  are read from disk on the application detail page. */
+interface RunResult {
+  fitScore: number | null;
+}
 
 interface FormFields {
   resumeText: string;
@@ -61,6 +67,9 @@ interface ResultResponse {
     companyResearch:        CompanyResearch | null;
     jobDetails:             JobDetails | null;
   };
+  /** JobApplication id promoted from this run (present once the run is DONE
+   *  and the promote step has linked it to a tracked application). */
+  applicationId?: string | null;
   error?: string;
 }
 
@@ -77,6 +86,7 @@ const PIPELINE_PREVIEW: Array<{ code: string; label: string; stageTag: string }>
 ];
 
 const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_MS = 5 * 60 * 1000; // give up after 5 minutes of polling
 
 // ── Hook: poll optimization status ────────────────────────────────────────────
 
@@ -86,7 +96,8 @@ function useOptimizationPoll() {
   const [phase, setPhase] = useState<PollPhase>("idle");
   const [correlationId, setCorrelationId] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [results, setResults] = useState<ResultsData | null>(null);
+  const [results, setResults] = useState<RunResult | null>(null);
+  const [applicationId, setApplicationId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number>(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -104,6 +115,7 @@ function useOptimizationPoll() {
     setCorrelationId(null);
     setStatus(null);
     setResults(null);
+    setApplicationId(null);
     setErrorMessage(null);
   }, [stopPolling]);
 
@@ -113,6 +125,7 @@ function useOptimizationPoll() {
     setCorrelationId(null);
     setStatus(null);
     setResults(null);
+    setApplicationId(null);
     setErrorMessage(null);
     setStartedAt(Date.now());
 
@@ -147,7 +160,15 @@ function useOptimizationPoll() {
       setPhase("polling");
 
       // 2. Start polling status
+      const pollStartedAt = Date.now();
       pollRef.current = setInterval(async () => {
+        if (Date.now() - pollStartedAt > MAX_POLL_MS) {
+          stopPolling();
+          setErrorMessage("Optimization timed out. Please try again.");
+          setPhase("error");
+          return;
+        }
+
         try {
           const statusRes = await fetch(`/api/optimize/status/${cid}`);
           if (!statusRes.ok) {
@@ -173,20 +194,10 @@ function useOptimizationPoll() {
             }
             const resultJson = (await resultRes.json()) as ResultResponse;
             if (resultJson.status === "DONE" && resultJson.result) {
-              const resultsData: ResultsData = {
-                correlationId:          cid,
-                optimizedResumeContent: resultJson.result.optimizedResumeContent,
-                optimizedCoverLetter:   resultJson.result.optimizedCoverLetter,
-                interviewCheatsheet:    resultJson.result.interviewCheatsheet,
-                reportMarkdown:         resultJson.result.reportMarkdown,
-                fitScore:               resultJson.result.fitScore,
-                warnings:               resultJson.result.warnings,
-                companyResearch:        resultJson.result.companyResearch ?? null,
-                jobDetails:             resultJson.result.jobDetails ?? null,
-              };
-              setResults(resultsData);
+              const promotedId = resultJson.applicationId ?? null;
+              setResults({ fitScore: resultJson.result.fitScore });
+              setApplicationId(promotedId);
               setPhase("done");
-              saveSearch(fields.jobUrl, resultsData);
             }
           } else if (statusJson.status === "FAILED") {
             stopPolling();
@@ -210,12 +221,13 @@ function useOptimizationPoll() {
 
   const isLoading = phase === "submitting" || phase === "polling";
 
-  return { phase, isLoading, correlationId, status, results, errorMessage, startedAt, start, reset };
+  return { phase, isLoading, correlationId, status, results, applicationId, errorMessage, startedAt, start, reset };
 }
 
 // ── Main form ─────────────────────────────────────────────────────────────────
 
 export function OptimizerForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   // Pre-fill from URL query params (coming from the job scanner) at init — no
   // effect needed, so there's no setState-in-effect cascade.
@@ -229,7 +241,6 @@ export function OptimizerForm() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const prefilledFromUrl = Boolean(searchParams.get("jobUrl"));
-  const [showResults, setShowResults] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const poll = useOptimizationPoll();
 
@@ -344,22 +355,24 @@ export function OptimizerForm() {
 
   const agentStatus: AgentStatusMap | null = poll.status?.agentStatus ?? null;
   const runActive = poll.phase === "submitting" || poll.phase === "polling" || poll.phase === "done";
+  // Promotion should have linked the run to a JobApplication by the time the
+  // graph reports DONE. If it didn't, surface a clear error instead of a dead
+  // "View results" button.
+  const promoteFailed =
+    poll.phase === "done" && !poll.applicationId;
 
-  // Final, full results view — reached from the "View results →" button.
-  if (showResults && poll.results) {
-    return (
-      <ResultsView
-        data={poll.results}
-        onReset={() => {
-          setShowResults(false);
-          poll.reset();
-        }}
-      />
-    );
+  // When the run finishes, the optimizer's "results" ARE the promoted
+  // JobApplication — navigate to the application detail page, which renders the
+  // same rich view (DocumentPanel with edit / regenerate .docx + .pdf / download,
+  // AI Chat, insights) used by tracked applications.
+  function viewResults() {
+    if (poll.applicationId) {
+      router.push(`/applications/${poll.applicationId}`);
+    }
   }
 
   // Live multi-agent pipeline — bound to the real streamed agent status.
-  if (runActive) {
+  if (runActive && !promoteFailed) {
     return (
       <AgentPipeline
         agentStatus={agentStatus}
@@ -368,8 +381,34 @@ export function OptimizerForm() {
         fitScore={poll.results?.fitScore ?? null}
         warnings={poll.status?.warnings ?? []}
         onReplay={() => poll.start(fields)}
-        onViewResults={poll.phase === "done" && poll.results ? () => setShowResults(true) : undefined}
+        onViewResults={poll.phase === "done" ? viewResults : undefined}
       />
+    );
+  }
+
+  if (promoteFailed) {
+    return (
+      <div className="mx-auto w-full max-w-[640px] py-16 px-4">
+        <div
+          className="rounded-[14px] px-5 py-4 text-sm"
+          style={{
+            background: "color-mix(in srgb, var(--state-error) 10%, transparent)",
+            border: "1px solid var(--state-error)",
+            color: "var(--state-error)",
+          }}
+        >
+          The agents finished, but we couldn&apos;t save the results to your
+          applications. Please try again.
+        </div>
+        <button
+          type="button"
+          onClick={() => poll.reset()}
+          className="mt-4 rounded-[11px] px-4 py-2 text-sm font-medium"
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
+        >
+          Start over
+        </button>
+      </div>
     );
   }
 
@@ -530,7 +569,7 @@ export function OptimizerForm() {
               placeholder="…or paste your resume as plain text / Markdown"
               value={fields.resumeText}
               onChange={(e) => setResumeText(e.target.value)}
-              className="min-h-32 resize-y font-mono text-sm"
+              className="h-72 max-h-72 resize-none overflow-y-auto font-mono text-sm"
             />
           </div>
 
@@ -544,7 +583,7 @@ export function OptimizerForm() {
               placeholder="Paste the full description if the URL is behind a login…"
               value={fields.jobDescriptionText}
               onChange={(e) => setField("jobDescriptionText", e.target.value)}
-              className="min-h-24 resize-y text-sm"
+              className="h-48 max-h-48 resize-none overflow-y-auto text-sm"
             />
           </div>
 

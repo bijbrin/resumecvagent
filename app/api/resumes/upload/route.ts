@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { ensureUser } from "@/lib/resume/user";
 import { extractResumeText, MAX_RESUME_BYTES } from "@/lib/resume/extract";
 import { ResumeSource } from "@/lib/generated/prisma/client";
+import { csrfCheck } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,9 @@ function errorMessage(err: unknown): string {
 }
 
 export async function POST(req: NextRequest) {
+  const csrfError = csrfCheck(req);
+  if (csrfError) return csrfError;
+
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

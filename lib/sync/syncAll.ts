@@ -7,7 +7,7 @@
 import type { PrismaClient } from "../generated/prisma/client";
 import { listJobFolders } from "./paths";
 import { importApplication, type ImportResult } from "./importApplication";
-import { exportApplication, type ExportResult } from "./exportApplication";
+import { exportApplicationRecord, type ExportResult } from "./exportApplication";
 
 /**
  * Resolve which user owns synced applications. The web app is effectively
@@ -51,13 +51,13 @@ export async function exportAll(
   prisma: PrismaClient,
   userId: string,
 ): Promise<ExportResult[]> {
-  const apps = await prisma.jobApplication.findMany({
-    where: { userId },
-    select: { id: true },
-  });
+  // Batch-fetch full rows up front so exportApplicationRecord doesn't re-query
+  // each one by id — turns 2N roundtrips (findUnique + update per app) into
+  // N+1 (one findMany, then one update per app).
+  const apps = await prisma.jobApplication.findMany({ where: { userId } });
   const results: ExportResult[] = [];
   for (const app of apps) {
-    results.push(await exportApplication(prisma, app.id));
+    results.push(await exportApplicationRecord(prisma, app));
   }
   return results;
 }

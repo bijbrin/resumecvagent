@@ -77,7 +77,7 @@ const serverSchema = z.object({
   SERPER_API_KEY:    z.string().min(1).optional(),
 
   // ── Auth (Clerk server-side key) ───────────────────────────────────────
-  CLERK_SECRET_KEY: z.string().min(1).optional(), // required once Clerk is wired
+  CLERK_SECRET_KEY: z.string().min(1, "CLERK_SECRET_KEY is required for authentication"),
 
   // ── Observability ─────────────────────────────────────────────────────
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

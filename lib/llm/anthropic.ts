@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { env } from "@/lib/config/env";
 import { kimiGenerateText, KIMI_MODEL } from "./kimi";
 import { openaiGenerateText, OPENAI_EXTRACTION_MODEL, OPENAI_REASONING_MODEL } from "./openai";
 import {
@@ -10,9 +11,14 @@ import {
 } from "./openrouter";
 
 // Singleton Anthropic client — created once, reused across requests.
+// Only called from anthropicGenerateText, which is gated on
+// process.env.ANTHROPIC_API_KEY being set (see generateTextWithFallback below).
 let _client: Anthropic | null = null;
 function client(): Anthropic {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  if (!_client) {
+    if (!env.ANTHROPIC_API_KEY) throw new Error("Anthropic client requested but ANTHROPIC_API_KEY is not set");
+    _client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  }
   return _client;
 }
 

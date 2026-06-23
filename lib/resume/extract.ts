@@ -16,6 +16,16 @@ export function detectSource(file: File): "PDF" | "DOCX" | null {
   return null;
 }
 
+// file.type and file.name are both client-controlled — a malicious upload could
+// claim "application/pdf" with arbitrary bytes. Cross-check the real file
+// content against each format's magic-byte signature before parsing it.
+const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // "%PDF"
+const DOCX_MAGIC = [0x50, 0x4b, 0x03, 0x04]; // ZIP local file header ("PK\x03\x04")
+
+function matchesMagicBytes(buffer: Buffer, magic: number[]): boolean {
+  return magic.every((byte, i) => buffer[i] === byte);
+}
+
 export async function extractResumeText(file: File): Promise<ExtractedResume> {
   const source = detectSource(file);
   if (!source) {
@@ -27,6 +37,11 @@ export async function extractResumeText(file: File): Promise<ExtractedResume> {
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  const magic = source === "PDF" ? PDF_MAGIC : DOCX_MAGIC;
+  if (!matchesMagicBytes(buffer, magic)) {
+    throw new Error("File content doesn't match its extension — the upload may be corrupted or mislabeled.");
+  }
 
   const text = source === "PDF" ? await extractPdf(buffer) : await extractDocx(buffer);
   const trimmed = text.trim();

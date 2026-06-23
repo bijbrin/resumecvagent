@@ -41,9 +41,9 @@ const EMPTY: ApplicationInsights = {
  * Load insights from the latest DONE run linked to this application. Returns
  * empty (all null / []) when the application has never been optimized.
  */
-export async function getApplicationInsights(appId: string): Promise<ApplicationInsights> {
+export async function getApplicationInsights(appId: string, userId: string): Promise<ApplicationInsights> {
   const run = await prisma.optimizationRun.findFirst({
-    where: { jobApplicationId: appId, status: RunStatus.DONE },
+    where: { jobApplicationId: appId, userId, status: RunStatus.DONE },
     orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
     select: { correlationId: true, resultJson: true, warnings: true },
   });

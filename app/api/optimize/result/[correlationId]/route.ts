@@ -21,6 +21,8 @@ interface DoneResponse {
   correlationId: string;
   status:        "DONE";
   result:        ResultPayload;
+  /** Id of the JobApplication promoted from this run (null for legacy runs). */
+  applicationId: string | null;
 }
 
 interface RunningResponse {
@@ -53,6 +55,7 @@ export async function GET(
       status:     true,
       resultJson: true,
       warnings:   true,
+      jobApplicationId: true,
     },
   });
 
@@ -71,7 +74,9 @@ export async function GET(
       status: "FAILED",
       error:  run.warnings[run.warnings.length - 1] ?? "Optimization failed",
     };
-    return NextResponse.json(response, { status: 500 });
+    // 422, not 500 — a FAILED run is an expected business-logic outcome (bad
+    // job URL, LLM failure, etc.), not a server error.
+    return NextResponse.json(response, { status: 422 });
   }
 
   // DONE (or PENDING — treat as done if resultJson exists)
@@ -86,6 +91,11 @@ export async function GET(
     jobDetails:             null,
   };
 
-  const response: DoneResponse = { correlationId, status: "DONE", result };
+  const response: DoneResponse = {
+    correlationId,
+    status:        "DONE",
+    result,
+    applicationId: run.jobApplicationId,
+  };
   return NextResponse.json(response);
 }

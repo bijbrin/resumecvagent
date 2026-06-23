@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { z } from "zod";
+import { auth } from "@clerk/nextjs/server";
+import { csrfCheck } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -12,7 +14,35 @@ const bodySchema = z.object({
   name: z.string().max(200).optional().or(z.literal("")),
 });
 
+// Simple in-memory token bucket: 3 requests per user per hour. Resets on
+// server restart — acceptable for this low-volume contact form.
+const RATE_LIMIT = 3;
+const RATE_WINDOW_MS = 60 * 60 * 1000;
+const requestLog = new Map<string, number[]>();
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = (requestLog.get(userId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (timestamps.length >= RATE_LIMIT) {
+    requestLog.set(userId, timestamps);
+    return true;
+  }
+  timestamps.push(now);
+  requestLog.set(userId, timestamps);
+  return false;
+}
+
 export async function POST(request: Request) {
+  const csrfError = csrfCheck(request);
+  if (csrfError) return csrfError;
+
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (isRateLimited(userId)) {
+    return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+  }
+
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
 

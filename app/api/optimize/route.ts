@@ -4,7 +4,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createInitialState } from "@/lib/state/resumeState";
 import { runGraphInBackground } from "@/lib/graph/runOptimization";
+import { promoteOptimizationRunToApplication } from "@/lib/applications/promoteRun";
 import { RunStatus, ResumeSource } from "@/lib/generated/prisma/client";
+import { safeErrorDetail } from "@/lib/errors";
+import { csrfCheck } from "@/lib/csrf";
 
 // Node.js runtime required: Prisma, LangGraph, and the LLM toolchain
 // need Node APIs that are unavailable in the Edge runtime.
@@ -29,13 +32,16 @@ function errorMessage(err: unknown): string {
 }
 
 export async function POST(req: NextRequest) {
+  const csrfError = csrfCheck(req);
+  if (csrfError) return csrfError;
+
   // ── Top-level guard — ensures every failure path returns JSON ─────────────
   try {
     return await handleOptimize(req);
   } catch (err) {
     console.error("[optimize] unhandled error:", err);
     return NextResponse.json(
-      { error: "Internal server error", detail: errorMessage(err) },
+      { error: "Internal server error", detail: safeErrorDetail(err) },
       { status: 500 },
     );
   }
@@ -85,7 +91,7 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
   } catch (err) {
     console.error("[optimize] DB user upsert failed:", errorMessage(err));
     return NextResponse.json(
-      { error: "Database error — check DATABASE_URL and run prisma db push.", detail: errorMessage(err) },
+      { error: "Database error — check DATABASE_URL and run prisma db push.", detail: safeErrorDetail(err) },
       { status: 503 },
     );
   }
@@ -123,7 +129,7 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
   } catch (err) {
     console.error("[optimize] DB run create failed:", errorMessage(err));
     return NextResponse.json(
-      { error: "Database error — could not create optimization run.", detail: errorMessage(err) },
+      { error: "Database error — could not create optimization run.", detail: safeErrorDetail(err) },
       { status: 503 },
     );
   }
@@ -143,7 +149,22 @@ async function handleOptimize(req: NextRequest): Promise<NextResponse> {
 
   // ── Return immediately — the client polls for progress and results ────────
   after(async () => {
-    await runGraphInBackground(run.id, initialState);
+    await runGraphInBackground(run.id, initialState, {
+      // Content lives in the promoted job folder, not Postgres — keep PII out
+      // of the DB. The promote step writes only PII-safe insights to resultJson.
+      persistResultJson: false,
+      onDone: async (result) => {
+        await promoteOptimizationRunToApplication({
+          userId,
+          runId:         run.id,
+          correlationId,
+          jobUrl:             data.jobUrl,
+          companyName:        data.companyName || null,
+          jobDescriptionText: data.jobDescriptionText || null,
+          result,
+        });
+      },
+    });
   });
 
   return NextResponse.json(

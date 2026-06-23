@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -9,6 +10,15 @@ import { ApplicationDetail, type ApplicationMeta } from "@/components/applicatio
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Application | ResumeCV Agent",
+  description: "Edit the tailored resume and cover letter, review fit score and company research, and chat with the AI assistant for this application.",
+  openGraph: {
+    title: "Application | ResumeCV Agent",
+    description: "Edit the tailored resume and cover letter, review fit score and company research, and chat with the AI assistant for this application.",
+  },
+};
 
 export default async function ApplicationDetailPage({
   params,
@@ -29,7 +39,7 @@ export default async function ApplicationDetailPage({
 
   const [content, insights] = await Promise.all([
     readApplicationContent(app.folderPath),
-    getApplicationInsights(app.id),
+    getApplicationInsights(app.id, userId),
   ]);
 
   return (

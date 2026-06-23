@@ -1,11 +1,12 @@
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { AppHeader } from "@/components/app-shell/app-header";
+import { AppErrorBoundary } from "@/components/app-shell/error-boundary";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="relative flex min-h-screen overflow-hidden"
+      className="relative flex flex-col h-screen overflow-hidden"
       style={{ background: "var(--bg-base)", color: "var(--text-primary)" }}
     >
       {/* Ambient accent glows — behind everything, non-interactive */}
@@ -38,12 +39,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }}
       />
 
-      <Sidebar />
+      <AppHeader themeToggle={<ThemeToggle />} />
 
-      <main className="flex flex-1 flex-col min-w-0 relative z-[2]">
-        <AppHeader themeToggle={<ThemeToggle />} />
-        <div className="flex-1 overflow-y-auto">{children}</div>
-      </main>
+      <div className="flex flex-1 overflow-hidden relative z-[2]">
+        <Sidebar />
+        <main className="flex-1 overflow-y-auto min-w-0" style={{ scrollBehavior: "smooth" }}>
+          <AppErrorBoundary>{children}</AppErrorBoundary>
+        </main>
+      </div>
     </div>
   );
 }

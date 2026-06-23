@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { readApplicationContent } from "@/lib/sync/readContent";
 import { exportApplication } from "@/lib/sync/exportApplication";
 import { ApplicationStatus, Prisma } from "@/lib/generated/prisma/client";
+import { csrfCheck } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const csrfError = csrfCheck(req);
+  if (csrfError) return csrfError;
+
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -81,7 +85,10 @@ export async function PATCH(
     ...(d.notes        !== undefined && { notes: d.notes }),
   };
 
-  const updated = await prisma.jobApplication.update({ where: { id }, data });
+  // Scope the WHERE by userId too, not just id — without it, ownedApplication's
+  // check above and this write aren't atomic, so a row transferred between the
+  // check and the update could be modified by the wrong user.
+  const updated = await prisma.jobApplication.update({ where: { id, userId }, data });
 
   // Keep the on-disk sidecar in step with the DB (metadata-only export).
   try {

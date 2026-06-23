@@ -1,6 +1,7 @@
 import "server-only";
 import * as cheerio from "cheerio";
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { firecrawlScrapeJson } from "@/lib/scraper/firecrawl";
 import {
   buildTags,
@@ -279,6 +280,9 @@ async function runSource(source: JobSource): Promise<{ jobs: JobListing[]; error
  * in parallel (kept for compatibility / non-progressive callers).
  */
 export async function GET(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const source = req.nextUrl.searchParams.get("source") as JobSource | null;
   const scrapedAt = new Date().toISOString();
 

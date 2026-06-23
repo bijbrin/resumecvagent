@@ -9,6 +9,7 @@ import { ensureUser } from "@/lib/resume/user";
 import { importApplication } from "@/lib/sync/importApplication";
 import { startApplicationRun, StartRunError } from "@/lib/applications/startRun";
 import { FILES, getWorkspaceRoot, jobFolderPath } from "@/lib/sync/paths";
+import { csrfCheck } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -61,6 +62,9 @@ function buildJdMarkdown(data: z.infer<typeof BodySchema>): string {
 }
 
 export async function POST(req: NextRequest) {
+  const csrfError = csrfCheck(req);
+  if (csrfError) return csrfError;
+
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { firecrawlScrapeMarkdown } from "@/lib/scraper/firecrawl";
 import { buildTags, type JobTags } from "@/lib/scraper/jobTags";
 
@@ -48,6 +49,9 @@ function pickCompanyUrl(jobUrl: string, links: string[]): string | undefined {
 }
 
 export async function GET(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const url = req.nextUrl.searchParams.get("url");
   if (!url || !/^https?:\/\//.test(url)) {
     return NextResponse.json({ error: "A valid ?url= is required" }, { status: 400 });

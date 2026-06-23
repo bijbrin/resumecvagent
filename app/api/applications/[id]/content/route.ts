@@ -3,6 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { exportApplication } from "@/lib/sync/exportApplication";
+import { safeErrorDetail } from "@/lib/errors";
+import { csrfCheck } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -26,6 +28,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const csrfError = csrfCheck(req);
+  if (csrfError) return csrfError;
+
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -53,9 +58,8 @@ export async function PUT(
       kind === "resume" ? { resume: content } : { coverLetter: content },
     );
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    console.error("[applications/content] save failed:", detail);
-    return NextResponse.json({ error: "Failed to save content", detail }, { status: 500 });
+    console.error("[applications/content] save failed:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Failed to save content", detail: safeErrorDetail(err) }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, savedAt: new Date().toISOString() });

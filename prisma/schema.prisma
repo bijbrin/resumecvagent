@@ -131,6 +131,9 @@ model OptimizationRun {
   completedAt DateTime?
 
   artifacts OptimizationArtifact[]
+
+  @@index([userId])
+  @@index([jobApplicationId])
 }
 
 enum RunStatus {

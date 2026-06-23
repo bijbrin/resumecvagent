@@ -11,12 +11,15 @@
  * false` and write back only the PII-safe insight fields to Postgres.
  */
 import "server-only";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
 import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { createInitialState } from "@/lib/state/resumeState";
 import { runGraphInBackground } from "@/lib/graph/runOptimization";
 import { readApplicationContent, readMasterContent } from "@/lib/sync/readContent";
 import { exportApplication } from "@/lib/sync/exportApplication";
+import { FILES } from "@/lib/sync/paths";
 import {
   ApplicationStatus,
   RunStatus,
@@ -99,6 +102,16 @@ export async function startApplicationRun(
             where: { id: app.id },
             data: { status: ApplicationStatus.TAILORING },
           });
+        }
+        // Seed JD.md from the agent's scraped raw text when the folder has no
+        // JD yet (e.g. a freshly-scraped job that only carried a jobUrl). We
+        // don't overwrite an existing JD — the user may have edited it.
+        if (!content.jd && result.jobDetails?.rawText?.trim()) {
+          writeFileSync(
+            path.join(app.folderPath, FILES.jd),
+            result.jobDetails.rawText,
+            "utf8",
+          );
         }
         await exportApplication(prisma, app.id, {
           resume: result.optimizedResumeContent,

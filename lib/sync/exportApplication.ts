@@ -11,7 +11,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { PrismaClient } from "../generated/prisma/client";
+import type { PrismaClient, JobApplication } from "../generated/prisma/client";
 import { buildResumeDocx } from "../docx/resumeDocx";
 import { FILES } from "./paths";
 import {
@@ -52,6 +52,20 @@ export async function exportApplication(
 ): Promise<ExportResult> {
   const app = await prisma.jobApplication.findUnique({ where: { id: appId } });
   if (!app) throw new Error(`JobApplication ${appId} not found`);
+  return exportApplicationRecord(prisma, app, artifacts);
+}
+
+/**
+ * Same as `exportApplication`, but takes an already-fetched row instead of
+ * re-querying by id. Lets callers that already hold a batch of rows (e.g.
+ * `exportAll`) avoid one `findUnique` per application.
+ */
+export async function exportApplicationRecord(
+  prisma: PrismaClient,
+  app: JobApplication,
+  artifacts: ExportArtifacts = {},
+): Promise<ExportResult> {
+  const appId = app.id;
 
   mkdirSync(app.folderPath, { recursive: true });
   const written: string[] = [];

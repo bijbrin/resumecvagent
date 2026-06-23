@@ -31,6 +31,29 @@ relevant file before continuing.
 
 ## Key surfaces & invariants
 
+- **Design system (2026-06-22 redesign).** Dark-first
+  **crimson** accent (`#FF5161`) + **Geist / Geist Mono**,
+  defined as CSS custom properties in `app/globals.css`
+  — components theme via `var(--…)` tokens (`--bg-base`,
+  `--surface`, `--text-*`, `--accent*`, `--ok`), never
+  hardcoded hex. Accent is runtime-swappable
+  (crimson/violet/teal/amber) via `data-accent` on
+  `<html>` (`components/app-shell/accent-switcher.tsx`).
+  The authenticated app uses a **two-column sidebar
+  shell** (`app/(app)/layout.tsx` +
+  `components/app-shell/*`), not a top-bar. See
+  `context/ui-context.md` for the full token tables.
+
+- **Live pipeline is bound to real data, not a synthetic
+  timeline.** `components/agent-pipeline.tsx`
+  (Flow/Timeline/Stream) derives every visual state from
+  the polled `AgentStatusMap` (status enum, real
+  `startedAt`/`endedAt`/`message` timestamps) and the run
+  `fitScore`/`warnings`. Keep it presentation-only — don't
+  fabricate scores or reorder the 8 agents
+  (IP/JB/CR/RA/ST/RW/CW/FC), whose stage grouping mirrors
+  the backend graph.
+
 - **`/applications/[id]` is the single canonical
   application detail page.** It merges what used to be
   split between the application view and the optimizer

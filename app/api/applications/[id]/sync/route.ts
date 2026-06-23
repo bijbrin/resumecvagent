@@ -3,6 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/db";
 import { importApplication } from "@/lib/sync/importApplication";
 import { exportApplication } from "@/lib/sync/exportApplication";
+import { safeErrorDetail } from "@/lib/errors";
+import { csrfCheck } from "@/lib/csrf";
 
 // Node.js runtime: reads and writes the local filesystem.
 export const runtime = "nodejs";
@@ -13,13 +15,13 @@ export const runtime = "nodejs";
  */
 function isLocalRequest(req: NextRequest): boolean {
   if (process.env.NODE_ENV === "production") return false;
-  const host = (req.headers.get("host") ?? "").toLowerCase();
-  return (
-    host.startsWith("localhost") ||
-    host.startsWith("127.0.0.1") ||
-    host.startsWith("[::1]") ||
-    host.startsWith("0.0.0.0")
-  );
+  // The Host header is client-supplied and trivially spoofable. A request that
+  // arrived through a reverse proxy carries X-Forwarded-For — treat that as
+  // non-local regardless of what Host claims, then require an exact loopback
+  // host match (not startsWith, which "localhost.evil.com" would also pass).
+  if (req.headers.get("x-forwarded-for")) return false;
+  const host = (req.headers.get("host") ?? "").toLowerCase().split(":")[0];
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "0.0.0.0";
 }
 
 async function ownedApplication(userId: string, id: string) {
@@ -37,6 +39,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const csrfError = csrfCheck(req);
+  if (csrfError) return csrfError;
+
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -56,8 +61,7 @@ export async function POST(
     await exportApplication(prisma, id); // metadata-only — refreshes application.yaml
     return NextResponse.json({ ok: true, syncedAt: new Date().toISOString() });
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    console.error("[applications/sync] failed:", detail);
-    return NextResponse.json({ error: "Sync failed", detail }, { status: 500 });
+    console.error("[applications/sync] failed:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Sync failed", detail: safeErrorDetail(err) }, { status: 500 });
   }
 }

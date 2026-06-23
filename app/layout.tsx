@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Resume Optimizer",
+  title: "ResumeCV Agent",
   description: "AI-powered resume & cover letter optimization agent",
 };
 

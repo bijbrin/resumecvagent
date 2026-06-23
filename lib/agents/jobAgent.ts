@@ -93,7 +93,7 @@ export async function jobAgentNode(
   console.log(`[jobAgent] Starting LLM extraction (${EXTRACTION_MODEL}, ${jobText.length} chars).`);
 
   let extracted: z.infer<typeof JobExtractSchema>;
-  let llmProvider: LLMProvider = "kimi";
+  let llmProvider: LLMProvider = "openrouter";
   try {
     const { result, provider } = await structuredOutputWithFallback(
       [{ role: "user", content: buildUserPrompt(jobText, siteHint) }],
@@ -125,9 +125,9 @@ export async function jobAgentNode(
       ? { companyName: extracted.company }
       : {};
 
-  const kimiWarning =
-    llmProvider !== "kimi"
-      ? [appendWarning(state, `[jobAgent] Kimi unavailable — used ${llmProvider} fallback for job extraction.`)]
+  const fallbackWarning =
+    llmProvider !== "openrouter"
+      ? [appendWarning(state, `[jobAgent] OpenRouter unavailable — used ${llmProvider} fallback for job extraction.`)]
       : [];
 
   console.log(`[jobAgent] Returning jobDetails: title="${jobDetails.title}" skills=${jobDetails.requiredSkills.length}`);
@@ -135,7 +135,7 @@ export async function jobAgentNode(
   return {
     jobDetails,
     ...companyUpdate,
-    ...Object.assign({}, ...[...warnings, ...kimiWarning]),
+    ...Object.assign({}, ...[...warnings, ...fallbackWarning]),
     ...updateAgentStatus(state, "jobAgent", AgentStatus.Completed),
   };
 }

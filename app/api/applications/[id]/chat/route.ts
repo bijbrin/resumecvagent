@@ -6,6 +6,7 @@ import { readApplicationContent } from "@/lib/sync/readContent";
 import { getApplicationInsights } from "@/lib/applications/runInsights";
 import { readChat, appendChat, type ChatMessage } from "@/lib/sync/chat";
 import { chatComplete } from "@/lib/llm/anthropic";
+import { csrfCheck } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -80,6 +81,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const csrfError = csrfCheck(req);
+  if (csrfError) return csrfError;
+
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -103,7 +107,7 @@ export async function POST(
   try {
     const [content, insights] = await Promise.all([
       readApplicationContent(app.folderPath),
-      getApplicationInsights(app.id),
+      getApplicationInsights(app.id, userId),
     ]);
 
     const history = readChat(app.folderPath);

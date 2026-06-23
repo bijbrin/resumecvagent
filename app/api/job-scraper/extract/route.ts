@@ -1,6 +1,8 @@
 import "server-only";
 import * as cheerio from "cheerio";
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { csrfCheck } from "@/lib/csrf";
 
 const FETCH_HEADERS = {
   "User-Agent":
@@ -221,6 +223,12 @@ async function extractLinkedIn(url: string): Promise<Partial<JobData> | null> {
 }
 
 export async function POST(req: Request) {
+  const csrfError = csrfCheck(req);
+  if (csrfError) return csrfError;
+
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const body = await req.json();
     const { url, source, existing } = body;

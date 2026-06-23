@@ -79,6 +79,19 @@ export async function runGraphInBackground(
       jobDetails:             finalState.jobDetails             ?? null,
     };
 
+    // Run `onDone` (artifact writing, application promotion) BEFORE flipping the
+    // run to DONE. Clients poll status and only fetch results once DONE is
+    // observed, so this guarantees artifacts are on disk and the run is linked
+    // to its JobApplication before anyone reads the result — no race where a
+    // DONE run is missing its folder content or applicationId.
+    if (onDone) {
+      try {
+        await onDone(result);
+      } catch (cbErr) {
+        console.error("[optimize] onDone callback failed:", errorMessage(cbErr));
+      }
+    }
+
     await prisma.optimizationRun.update({
       where: { id: runId },
       data: {
@@ -90,14 +103,6 @@ export async function runGraphInBackground(
           : {}),
       },
     });
-
-    if (onDone) {
-      try {
-        await onDone(result);
-      } catch (cbErr) {
-        console.error("[optimize] onDone callback failed:", errorMessage(cbErr));
-      }
-    }
 
     console.log("[optimize] run completed:", runId);
   } catch (err) {

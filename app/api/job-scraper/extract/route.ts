@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { csrfCheck } from "@/lib/csrf";
+import { assertSafeUrl } from "@/lib/url-guard";
 
 const FETCH_HEADERS = {
   "User-Agent":
@@ -235,6 +236,11 @@ export async function POST(req: Request) {
 
     if (!url || !source) {
       return NextResponse.json({ error: "Missing url or source" }, { status: 400 });
+    }
+
+    const guard = await assertSafeUrl(url);
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error ?? "Invalid URL." }, { status: 400 });
     }
 
     // Start with existing data if provided, so we always have a fallback

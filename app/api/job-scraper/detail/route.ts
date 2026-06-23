@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { firecrawlScrapeMarkdown } from "@/lib/scraper/firecrawl";
 import { buildTags, type JobTags } from "@/lib/scraper/jobTags";
+import { assertSafeUrl } from "@/lib/url-guard";
 
 // On-demand single-page scrape — fast, but still a network round-trip to Firecrawl.
 export const runtime = "nodejs";
@@ -55,6 +56,11 @@ export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
   if (!url || !/^https?:\/\//.test(url)) {
     return NextResponse.json({ error: "A valid ?url= is required" }, { status: 400 });
+  }
+
+  const guard = await assertSafeUrl(url);
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error ?? "Invalid URL." }, { status: 400 });
   }
 
   const scrape = await firecrawlScrapeMarkdown(url);
